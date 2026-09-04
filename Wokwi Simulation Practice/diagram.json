@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "author": "AirSense Team",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht", "top": -120, "left": -140, "attrs": {} },
+    { "type": "board-ssd1306", "id": "oled", "top": -140, "left": 120, "attrs": {} },
+    { "type": "wokwi-potentiometer", "id": "pot_pm25", "top": 160, "left": -180, "attrs": { "label": "PM2.5" } },
+    { "type": "wokwi-potentiometer", "id": "pot_gas", "top": 280, "left": -180, "attrs": { "label": "MQ135 Gas" } },
+    { "type": "wokwi-potentiometer", "id": "pot_rain", "top": 300, "left": 140, "attrs": { "label": "Rain Sensor" } },
+    { "type": "wokwi-led", "id": "led_green", "top": 160, "left": 40, "attrs": { "color": "green" } },
+    { "type": "wokwi-led", "id": "led_red", "top": 200, "left": 40, "attrs": { "color": "red" } },
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": 240, "left": 40, "attrs": {} },
+    { "type": "wokwi-microsd-card", "id": "sd", "top": -220, "left": -20, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:TX", "$serialMonitor:RX", "", [] ],
+    [ "esp:RX", "$serialMonitor:TX", "", [] ],
+    
+    [ "oled:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "oled:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "oled:SDA", "esp:21", "blue", [ "v0" ] ],
+    [ "oled:SCL", "esp:22", "yellow", [ "v0" ] ],
+
+    [ "dht:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "dht:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "dht:SDA", "esp:15", "green", [ "v0" ] ],
+
+    [ "pot_pm25:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "pot_pm25:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "pot_pm25:SIG", "esp:34", "purple", [ "v0" ] ],
+
+    [ "pot_gas:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "pot_gas:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "pot_gas:SIG", "esp:35", "orange", [ "v0" ] ],
+
+    [ "pot_rain:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "pot_rain:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "pot_rain:SIG", "esp:32", "cyan", [ "v0" ] ],
+
+    [ "led_green:A", "esp:25", "green", [ "v0" ] ],
+    [ "led_green:C", "esp:GND.2", "black", [ "v0" ] ],
+
+    [ "led_red:A", "esp:26", "red", [ "v0" ] ],
+    [ "led_red:C", "esp:GND.2", "black", [ "v0" ] ],
+
+    [ "buzzer:1", "esp:27", "purple", [ "v0" ] ],
+    [ "buzzer:2", "esp:GND.2", "black", [ "v0" ] ],
+
+    [ "sd:GND", "esp:GND.2", "black", [ "v0" ] ],
+    [ "sd:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "sd:CS", "esp:5", "orange", [ "v0" ] ],
+    [ "sd:SCK", "esp:18", "yellow", [ "v0" ] ],
+    [ "sd:MISO", "esp:19", "blue", [ "v0" ] ],
+    [ "sd:MOSI", "esp:23", "green", [ "v0" ] ]
+  ]
+}

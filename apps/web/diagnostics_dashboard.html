@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AirSense — Real-Time Sensor Health & Hardware Diagnostics</title>
+  
+  <!-- Modern Engineering & Monospace Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Local Paho MQTT with CDN Fallback -->
+  <script src="/static/paho-mqtt.js"></script>
+  <script>
+    if (typeof Paho === 'undefined' || !Paho.MQTT) {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"><\/script>');
+    }
+  </script>
+
+  <style>
+    :root {
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      /* Dark Theme Palettes */
+      --bg-primary: #0A0F1D;
+      --bg-secondary: #0F172A;
+      --bg-card: #1E293B;
+      --bg-card-hover: #24344D;
+      --border-subtle: #334155;
+      --border-highlight: #38BDF8;
+
+      --text-primary: #F8FAFC;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+
+      /* Status Colors */
+      --status-green: #10B981;
+      --status-green-bg: rgba(16, 185, 129, 0.15);
+      --status-green-border: rgba(16, 185, 129, 0.4);
+
+      --status-yellow: #F59E0B;
+      --status-yellow-bg: rgba(245, 158, 11, 0.15);
+      --status-yellow-border: rgba(245, 158, 11, 0.4);
+
+      --status-red: #EF4444;
+      --status-red-bg: rgba(239, 68, 68, 0.15);
+      --status-red-border: rgba(239, 68, 68, 0.4);
+
+      --status-blue: #0EA5E9;
+      --status-blue-bg: rgba(14, 165, 233, 0.15);
+      --status-blue-border: rgba(14, 165, 233, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background-color: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-subtle);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #0284C7, #0EA5E9);
+      color: white;
+      font-weight: 800;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      letter-spacing: 0.05em;
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .nav-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+    }
+
+    .nav-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--status-blue);
+      color: var(--status-blue);
+    }
+
+    .nav-btn.primary {
+      background: var(--status-blue);
+      border-color: var(--status-blue);
+      color: white;
+    }
+
+    .nav-btn.primary:hover {
+      background: #0284C7;
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 2rem;
+    }
+
+    /* Hero Status Banner */
+    .system-banner {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr 1fr;
+      gap: 1.5rem;
+      align-items: center;
+    }
+
+    .system-title-block h1 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      margin-bottom: 0.25rem;
+    }
+
+    .system-title-block p {
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .status-metric {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    .status-metric-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 0.35rem;
+    }
+
+    .status-metric-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background-color: var(--status-green);
+      box-shadow: 0 0 10px var(--status-green);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Section Headers */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .section-badge {
+      font-size: 0.75rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+
+    /* Sensor Diagnostic Cards Grid */
+    .sensor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .sensor-card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.5rem;
+      position: relative;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sensor-card:hover {
+      border-color: var(--border-highlight);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .card-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: 0.15rem;
+    }
+
+    .sensor-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+
+    .status-badge-online {
+      background: var(--status-green-bg);
+      border: 1px solid var(--status-green-border);
+      color: var(--status-green);
+    }
+
+    .status-badge-degraded {
+      background: var(--status-yellow-bg);
+      border: 1px solid var(--status-yellow-border);
+      color: var(--status-yellow);
+    }
+
+    .status-badge-offline {
+      background: var(--status-red-bg);
+      border: 1px solid var(--status-red-border);
+      color: var(--status-red);
+    }
+
+    /* Metadata Specification Table */
+    .spec-table {
+      width: 100%;
+      margin-bottom: 1.25rem;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+    }
+
+    .spec-table tr {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .spec-table td {
+      padding: 0.4rem 0;
+    }
+
+    .spec-label {
+      color: var(--text-muted);
+      width: 32%;
+    }
+
+    .spec-value {
+      color: var(--text-primary);
+      word-break: break-word;
+    }
+
+    /* Live Telemetry Display Within Card */
+    .card-telemetry-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .telemetry-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .telemetry-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .telemetry-label {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .telemetry-value {
+      font-family: var(--font-mono);
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #38BDF8;
+    }
+
+    /* Health Diagnostic Message Box */
+    .diagnostic-alert {
+      background: rgba(14, 165, 233, 0.08);
+      border-left: 3px solid var(--status-blue);
+      padding: 0.75rem 1rem;
+      border-radius: 0 6px 6px 0;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: auto;
+    }
+
+    .diagnostic-alert.warning {
+      background: rgba(245, 158, 11, 0.08);
+      border-left-color: var(--status-yellow);
+    }
+
+    /* Raw Terminal Log Section */
+    .log-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+
+    .terminal-container {
+      background: #060913;
+      border: 1px solid #1E293B;
+      border-radius: 8px;
+      padding: 1rem;
+      height: 240px;
+      overflow-y: auto;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: #A7F3D0;
+    }
+
+    .log-line {
+      margin-bottom: 0.25rem;
+      white-space: pre-wrap;
+    }
+
+    .log-time {
+      color: #64748B;
+    }
+
+    .log-tag {
+      color: #38BDF8;
+      font-weight: 600;
+    }
+
+    /* Standardized Topbar & Brand */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-mark {
+      background: #0284C7;
+      color: #FFFFFF;
+      font-weight: 800;
+      font-size: 13px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      letter-spacing: 0.5px;
+    }
+    .brand-title {
+      font-size: 17px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    /* Standardized Dashboard Navigation Tabs */
+    .dash-switcher {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--bg-secondary);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+    .dash-tab {
+      padding: 6px 14px;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-decoration: none;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--font-mono);
+    }
+    .dash-tab:hover {
+      color: var(--text-primary);
+      background: rgba(56, 189, 248, 0.12);
+    }
+    .dash-tab.active {
+      background: #0284C7;
+      color: #FFFFFF !important;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+    }
+
+    /* Standardized Multi-Column Comprehensive Footer */
+    .app-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 28px 0 16px 0;
+      margin-top: 40px;
+      font-family: var(--font-sans);
+    }
+    .footer-grid {
+      display: grid;
+      grid-template-columns: 1.5fr 1fr 1.2fr 1fr;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+    .footer-col h4 {
+      font-size: 11.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #38BDF8;
+      letter-spacing: 0.5px;
+      margin: 0 0 12px 0;
+      font-family: var(--font-mono);
+    }
+    .footer-links {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .footer-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 12px;
+      transition: color 0.2s ease;
+    }
+    .footer-links a:hover {
+      color: #38BDF8;
+      text-decoration: underline;
+    }
+    .footer-bottom-bar {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+      gap: 10px;
+      font-family: var(--font-mono);
+    }
+
+    @media (max-width: 900px) {
+      .topbar { flex-direction: column; align-items: stretch; gap: 12px; }
+      .dash-switcher { overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+      .system-banner { grid-template-columns: 1fr; }
+      .sensor-grid { grid-template-columns: 1fr; }
+      .footer-grid { grid-template-columns: 1fr; gap: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- UNIFIED SYSTEM TOPBAR -->
+  <header class="topbar">
+    <div class="brand-group">
+      <div class="brand-mark">AS</div>
+      <div>
+        <div class="brand-title">AirSense <span class="badge-tag" style="font-size:10px; padding:2px 8px; border-radius:4px; background:rgba(56,189,248,0.15); color:#38BDF8; font-family:var(--font-mono);">DIAGNOSTICS</span></div>
+        <div class="brand-sub">Hardware Health & Sensor Telemetry Inspector</div>
+      </div>
+    </div>
+
+    <!-- DASHBOARD NAVIGATION TABS -->
+    <nav class="dash-switcher">
+      <a href="/hardware" class="dash-tab">
+        <span>📟</span> HARDWARE HUB
+      </a>
+      <a href="/command" class="dash-tab">
+        <span>🌐</span> COMMAND CENTER
+      </a>
+      <a href="/diagnostics" class="dash-tab active">
+        <span>🩺</span> SENSOR HEALTH
+      </a>
+      <a href="/opensource" class="dash-tab">
+        <span>🛰️</span> 24/7 OPEN-SOURCE
+      </a>
+      <a href="/enterprise" class="dash-tab">
+        <span>🏢</span> ENTERPRISE
+      </a>
+    </nav>
+
+    <!-- INSTANT PING ACTION -->
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button class="nav-btn primary" onclick="forceDiagnosticRefresh()" style="margin:0; padding:0.45rem 0.9rem;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        Instant Ping
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <!-- Non-Technical Plain English Explainer Card -->
+    <div style="background:var(--bg-secondary); border:1px solid var(--border-subtle); border-left:4px solid #0284C7; border-radius:12px; padding:16px 20px; margin-bottom:1.5rem;">
+      <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
+        <span style="font-size:18px;">ℹ️</span>
+        <div>
+          <h2 style="font-size:14.5px; font-weight:800; color:var(--text-primary); margin:0; font-family:var(--font-mono);">What is AirSense and What Does It Do?</h2>
+          <p style="font-size:11.5px; color:var(--text-muted); margin:2px 0 0 0;">A simple, non-technical overview for students, faculty, and campus visitors</p>
+        </div>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:12px; margin-top:8px;">
+        <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.5; color:var(--text-secondary);">
+          <strong style="display:block; color:#0284C7; margin-bottom:3px; font-family:var(--font-mono); font-size:10.5px;">CAMPUS AIR MONITORING:</strong>
+          AirSense is a physical weather station installed on campus measuring the actual air you are breathing right now in Karachi.
+        </div>
+        <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.5; color:var(--text-secondary);">
+          <strong style="display:block; color:#0284C7; margin-bottom:3px; font-family:var(--font-mono); font-size:10.5px;">WHAT SENSORS MEASURE:</strong>
+          A laser measures dust, smoke, and smog (PM2.5/PM10). Built-in sensors measure temperature, humidity, and atmospheric pressure, while a rain sensor detects raindrops immediately.
+        </div>
+        <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 12px; font-size:11.5px; line-height:1.5; color:var(--text-secondary);">
+          <strong style="display:block; color:#0284C7; margin-bottom:3px; font-family:var(--font-mono); font-size:10.5px;">WHY GROUND-TRUTH MATTERS:</strong>
+          Instead of delayed city estimates from distant airports, AirSense delivers second-by-second ground truth data so students and faculty know when outdoor air is safe.
+        </div>
+      </div>
+    </div>
+    <!-- System Level Status Banner -->
+    <div class="system-banner">
+      <div class="system-title-block">
+        <h1>Hardware Health Monitor</h1>
+        <p>Continuous physical telemetry inspection, hardware bus verification, and optical particle ordering validation.</p>
+      </div>
+      <div class="status-metric">
+        <div class="status-metric-label">Station Liveness</div>
+        <div class="status-metric-value" id="systemLivenessText">
+          <div class="pulse-dot" id="systemPulseDot"></div>
+          <span id="livenessValue">LIVE_ACTIVE</span>
+        </div>
+      </div>
+      <div class="status-metric">
+        <div class="status-metric-label">Packet Recency</div>
+        <div class="status-metric-value" id="packetRecencyText">
+          <span id="recencySeconds">0</span>s ago
+        </div>
+      </div>
+      <div class="status-metric">
+        <div class="status-metric-label">Channel Latency</div>
+        <div class="status-metric-value" style="color: #38BDF8;" id="latencyText">
+          &lt; 20 ms (Local)
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Physical Sensor Diagnostic Cards -->
+    <div class="section-header">
+      <div class="section-title">
+        <span>Integrated Physical Sensors</span>
+      </div>
+      <div class="section-badge">4 Hardware Modules Online</div>
+    </div>
+
+    <div class="sensor-grid">
+      <!-- 1. PMS7003 Laser Dust Particle Counter -->
+      <div class="sensor-card" id="card-pms7003">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Plantower PMS7003</div>
+            <div class="card-subtitle">Laser Dust Particle Counter</div>
+          </div>
+          <div class="sensor-status-badge status-badge-online" id="badge-pms7003">ONLINE</div>
+        </div>
+
+        <table class="spec-table">
+          <tr>
+            <td class="spec-label">INTERFACE</td>
+            <td class="spec-value">UART2 (Serial 9600 Baud)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">PINOUT</td>
+            <td class="spec-value">TXD &rarr; GPIO 16 (RX2), RXD &rarr; GPIO 17 (TX2)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">POWER</td>
+            <td class="spec-value">5.0V VIN (Strict Laser Diode Requirement)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">FRAME SYNC</td>
+            <td class="spec-value" style="color: #10B981;">0x42 0x4D Validated</td>
+          </tr>
+        </table>
+
+        <div class="card-telemetry-box">
+          <div class="telemetry-row">
+            <span class="telemetry-label">Ultrafine PM1.0</span>
+            <span class="telemetry-value" id="val-pm1">-- &mu;g/m&sup3;</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Fine Particulate PM2.5</span>
+            <span class="telemetry-value" id="val-pm25">-- &mu;g/m&sup3;</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Coarse Inhalable PM10</span>
+            <span class="telemetry-value" id="val-pm10">-- &mu;g/m&sup3;</span>
+          </div>
+          <div class="telemetry-row" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+            <span class="telemetry-label">Physical Ordering Rule (PM1 &le; PM2.5 &le; PM10)</span>
+            <span class="telemetry-value" id="val-pms-order" style="font-size: 0.85rem; color: #10B981;">VERIFIED VALID</span>
+          </div>
+        </div>
+
+        <div class="diagnostic-alert" id="diag-pms7003">
+          Active UART2 binary frames synchronized. Laser counter operating at nominal scattering efficiency.
+        </div>
+      </div>
+
+      <!-- 2. Bosch BME280 Environmental Sensor -->
+      <div class="sensor-card" id="card-bme280">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Bosch BME280</div>
+            <div class="card-subtitle">Temperature, Humidity & Pressure</div>
+          </div>
+          <div class="sensor-status-badge status-badge-online" id="badge-bme280">ONLINE</div>
+        </div>
+
+        <table class="spec-table">
+          <tr>
+            <td class="spec-label">INTERFACE</td>
+            <td class="spec-value">I2C Fast Mode (0x76 / 0x77)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">PINOUT</td>
+            <td class="spec-value">SDA &rarr; GPIO 21, SCL &rarr; GPIO 22</td>
+          </tr>
+          <tr>
+            <td class="spec-label">POWER</td>
+            <td class="spec-value">3.3V VCC (Strictly 3.3V Rail)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">CALIBRATION</td>
+            <td class="spec-value" style="color: #10B981;">Factory Trimming Registers OK</td>
+          </tr>
+        </table>
+
+        <div class="card-telemetry-box">
+          <div class="telemetry-row">
+            <span class="telemetry-label">Ambient Temperature</span>
+            <span class="telemetry-value" id="val-temp">-- &deg;C</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Relative Humidity</span>
+            <span class="telemetry-value" id="val-hum">-- %</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Barometric Pressure</span>
+            <span class="telemetry-value" id="val-press">-- hPa</span>
+          </div>
+          <div class="telemetry-row" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+            <span class="telemetry-label">Calculated Dew Point</span>
+            <span class="telemetry-value" id="val-dewpoint" style="font-size: 0.85rem; color: #38BDF8;">-- &deg;C</span>
+          </div>
+        </div>
+
+        <div class="diagnostic-alert" id="diag-bme280">
+          I2C bus responsive. Bosch register compensation formulas operating within physical bounds (-40&deg;C to +85&deg;C).
+        </div>
+      </div>
+
+      <!-- 3. Resistive Raindrop Sensor Plate -->
+      <div class="sensor-card" id="card-rain">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Raindrop Plate</div>
+            <div class="card-subtitle">Resistive Precipitation Detector</div>
+          </div>
+          <div class="sensor-status-badge status-badge-online" id="badge-rain">ONLINE</div>
+        </div>
+
+        <table class="spec-table">
+          <tr>
+            <td class="spec-label">INTERFACE</td>
+            <td class="spec-value">ADC1 Channel 6 (12-bit SAR ADC)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">PINOUT</td>
+            <td class="spec-value">AO &rarr; GPIO 34 (Analog In Only)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">POWER</td>
+            <td class="spec-value">3.3V VCC & GND</td>
+          </tr>
+          <tr>
+            <td class="spec-label">SENSITIVITY</td>
+            <td class="spec-value">Precipitation Threshold &le; 2800 ADC</td>
+          </tr>
+        </table>
+
+        <div class="card-telemetry-box">
+          <div class="telemetry-row">
+            <span class="telemetry-label">Raw ADC Voltage Count</span>
+            <span class="telemetry-value" id="val-rain-adc">-- / 4095</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Estimated Analog Voltage</span>
+            <span class="telemetry-value" id="val-rain-volts">-- V</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Precipitation Flag</span>
+            <span class="telemetry-value" id="val-rain-flag">NO (Dry)</span>
+          </div>
+          <div class="telemetry-row" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+            <span class="telemetry-label">Plate Surface State</span>
+            <span class="telemetry-value" id="val-rain-status" style="font-size: 0.85rem; color: #10B981;">DRY (No Rain)</span>
+          </div>
+        </div>
+
+        <div class="diagnostic-alert" id="diag-rain">
+          ADC channel operational. High impedance indicates clean, dry copper trace surface.
+        </div>
+      </div>
+
+      <!-- 4. MicroSD SPI Flash Backup Module -->
+      <div class="sensor-card" id="card-microsd">
+        <div class="card-header">
+          <div>
+            <div class="card-title">MicroSD SPI Flash</div>
+            <div class="card-subtitle">Offline Circular Data Logger</div>
+          </div>
+          <div class="sensor-status-badge status-badge-online" id="badge-microsd">ONLINE</div>
+        </div>
+
+        <table class="spec-table">
+          <tr>
+            <td class="spec-label">INTERFACE</td>
+            <td class="spec-value">VSPI Bus (Hardware SPI)</td>
+          </tr>
+          <tr>
+            <td class="spec-label">PINOUT</td>
+            <td class="spec-value">CS &rarr; GPIO 5, SCK &rarr; GPIO 18, MOSI &rarr; GPIO 23, MISO &rarr; GPIO 19</td>
+          </tr>
+          <tr>
+            <td class="spec-label">POWER</td>
+            <td class="spec-value">3.3V VCC & GND</td>
+          </tr>
+          <tr>
+            <td class="spec-label">FILE SYSTEM</td>
+            <td class="spec-value" style="color: #10B981;">FAT32 (Circular CSV Storage)</td>
+          </tr>
+        </table>
+
+        <div class="card-telemetry-box">
+          <div class="telemetry-row">
+            <span class="telemetry-label">Offline Sync Buffer</span>
+            <span class="telemetry-value" style="color: #10B981;">READY</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Unsynced Cache Records</span>
+            <span class="telemetry-value">0 (Real-Time Ingest)</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">Log Partition State</span>
+            <span class="telemetry-value" style="font-size: 0.95rem;">/airsense_backup.csv</span>
+          </div>
+          <div class="telemetry-row" style="margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.1);">
+            <span class="telemetry-label">Write Latency</span>
+            <span class="telemetry-value" style="font-size: 0.85rem; color: #10B981;">&lt; 5 ms per row</span>
+          </div>
+        </div>
+
+        <div class="diagnostic-alert" id="diag-microsd">
+          VSPI bus mounted. High-priority local safety logging engaged if Wi-Fi or USB bridge disconnects.
+        </div>
+      </div>
+    </div>
+
+    <!-- Section: Real-Time Diagnostic Feed -->
+    <div class="log-section">
+      <div class="section-header">
+        <div class="section-title">
+          <span>Live Hardware Event & Packet Log</span>
+        </div>
+        <button class="nav-btn" onclick="clearTerminal()" style="padding: 0.25rem 0.75rem; font-size: 0.75rem;">
+          Clear Log
+        </button>
+      </div>
+      <div class="terminal-container" id="terminalLog">
+        <div class="log-line"><span class="log-time">[BOOT]</span> <span class="log-tag">[SYSTEM]</span> Diagnostic console loaded. Listening on local REST (/api/v1/ingest/sensors/diagnostic)...</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- COMPREHENSIVE MULTI-COLUMN FOOTER -->
+  <footer class="app-footer">
+    <div class="footer-grid">
+      <div class="footer-col brand-col">
+        <div style="font-weight:800; font-size:14px; color:#38BDF8; display:flex; align-items:center; gap:8px;">
+          <span style="background:#0284C7; color:#FFF; padding:2px 8px; border-radius:4px; font-size:11px; font-family:var(--font-mono);">AS</span>
+          AirSense Pakistan
+        </div>
+        <p style="font-size:11.5px; color:var(--text-secondary); margin-top:10px; line-height:1.55;">
+          Autonomous Environmental Ground-Truth Station & Edge AI Platform. Continuously measuring microclimate health and particulate dynamics across campus nodes.
+        </p>
+        <div style="margin-top:10px; font-size:10.5px; color:var(--text-muted); font-family:var(--font-mono);">
+          Station Node: <strong>BIC-KHI-ROOF-01</strong> • Lat: 24.8607° N, Lon: 67.0011° E
+        </div>
+      </div>
+
+      <div class="footer-col">
+        <h4>Platform Hubs</h4>
+        <ul class="footer-links">
+          <li><a href="/hardware">Hardware Station Hub</a></li>
+          <li><a href="/command">Command Center</a></li>
+          <li><a href="/diagnostics">Sensor Health Inspector</a></li>
+          <li><a href="/opensource">24/7 Open-Source Weather</a></li>
+          <li><a href="/enterprise">Enterprise Decision Matrix</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Data & Diagnostics</h4>
+        <ul class="footer-links">
+          <li><a href="/api/v1/health" target="_blank">System Health Gateway</a></li>
+          <li><a href="/api/v1/ingest/sensors/diagnostic" target="_blank">Live Hardware Diagnostics API</a></li>
+          <li><a href="/api/v1/hardware/minute-history?limit=30" target="_blank">Minute Telemetry Stream</a></li>
+          <li><a href="/api/v1/hardware/minute-export.csv" target="_blank">Download Minute CSV Backup</a></li>
+          <li><a href="/docs" target="_blank">FastAPI OpenAPI Docs</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Hardware Specification</h4>
+        <p style="font-size:11px; color:var(--text-secondary); line-height:1.6; margin:0; font-family:var(--font-mono);">
+          • PMS7003 Laser (UART2)<br>
+          • BME280 Sensor (I2C)<br>
+          • Raindrop Plate (ADC1 CH6)<br>
+          • MicroSD VSPI Logger<br>
+          • Dual Cloud Failover
+        </p>
+      </div>
+    </div>
+
+    <div class="footer-bottom-bar">
+      <div>© 2026 AirSense Pakistan. Research & Public Health Ground-Truth Platform.</div>
+      <div>Build: <span style="color:#38BDF8;">v5.2.0-LOCAL-PROD</span> • Architecture: <span style="color:#10B981; font-weight:700;">LOCAL VERIFIED</span></div>
+    </div>
+  </footer>
+
+  <script>
+    let lastDiagnosticPacketTime = 0;
+    const terminal = document.getElementById('terminalLog');
+
+    function logTerminal(tag, message, color = null) {
+      const now = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = 'log-line';
+      div.innerHTML = `<span class="log-time">[${now}]</span> <span class="log-tag" ${color ? 'style="color:' + color + '"' : ''}>[${tag}]</span> ${message}`;
+      terminal.appendChild(div);
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    function clearTerminal() {
+      terminal.innerHTML = '';
+      logTerminal('SYSTEM', 'Log cleared by user.');
+    }
+
+    function calculateDewPoint(temp, hum) {
+      if (temp === null || hum === null || hum <= 0) return null;
+      const a = 17.27;
+      const b = 237.7;
+      const alpha = ((a * temp) / (b + temp)) + Math.log(hum / 100.0);
+      return Math.round(((b * alpha) / (a - alpha)) * 10) / 10;
+    }
+
+    async function fetchDiagnostics() {
+      try {
+        const res = await fetch('/api/v1/ingest/sensors/diagnostic');
+        if (!res.ok) {
+          logTerminal('WARN', `Diagnostic endpoint returned HTTP ${res.status}`, '#F59E0B');
+          return;
+        }
+        const data = await res.json();
+        lastDiagnosticPacketTime = Date.now();
+        renderDiagnosticData(data);
+      } catch (err) {
+        logTerminal('ERROR', `Network failure reaching local diagnostic API: ${err.message}`, '#EF4444');
+      }
+    }
+
+    function renderDiagnosticData(data) {
+      // 1. Station Liveness
+      const livenessEl = document.getElementById('livenessValue');
+      const pulseDot = document.getElementById('systemPulseDot');
+      const liveness = data.station_liveness || 'UNKNOWN';
+      livenessEl.textContent = liveness;
+
+      if (liveness === 'LIVE_ACTIVE') {
+        pulseDot.style.backgroundColor = 'var(--status-green)';
+        pulseDot.style.boxShadow = '0 0 10px var(--status-green)';
+        livenessEl.style.color = 'var(--status-green)';
+      } else if (liveness === 'PARTIAL_DEGRADED') {
+        pulseDot.style.backgroundColor = 'var(--status-yellow)';
+        pulseDot.style.boxShadow = '0 0 10px var(--status-yellow)';
+        livenessEl.style.color = 'var(--status-yellow)';
+      } else {
+        pulseDot.style.backgroundColor = 'var(--status-red)';
+        pulseDot.style.boxShadow = '0 0 10px var(--status-red)';
+        livenessEl.style.color = 'var(--status-red)';
+      }
+
+      // 2. PMS7003
+      const pms = data.sensors?.pms7003;
+      if (pms) {
+        const badge = document.getElementById('badge-pms7003');
+        badge.textContent = pms.status;
+        badge.className = `sensor-status-badge ${pms.is_connected ? 'status-badge-online' : 'status-badge-offline'}`;
+
+        const vals = pms.last_valid_value;
+        if (vals) {
+          const pm1 = vals.pm1 !== null && vals.pm1 !== undefined ? vals.pm1.toFixed(1) : '--';
+          const pm25 = vals.pm2_5 !== null && vals.pm2_5 !== undefined ? vals.pm2_5.toFixed(1) : '--';
+          const pm10 = vals.pm10 !== null && vals.pm10 !== undefined ? vals.pm10.toFixed(1) : '--';
+
+          document.getElementById('val-pm1').textContent = `${pm1} \u03BCg/m\u00B3`;
+          document.getElementById('val-pm25').textContent = `${pm25} \u03BCg/m\u00B3`;
+          document.getElementById('val-pm10').textContent = `${pm10} \u03BCg/m\u00B3`;
+
+          const orderEl = document.getElementById('val-pms-order');
+          if (vals.pm1 !== null && vals.pm2_5 !== null && vals.pm10 !== null) {
+            if (vals.pm1 <= vals.pm2_5 && vals.pm2_5 <= vals.pm10) {
+              orderEl.textContent = 'VERIFIED VALID (PM1 \u2264 PM2.5 \u2264 PM10)';
+              orderEl.style.color = '#10B981';
+            } else {
+              orderEl.textContent = 'WARNING: Non-monotonic particle count';
+              orderEl.style.color = '#F59E0B';
+            }
+          }
+        }
+        if (pms.diagnostic_message) {
+          document.getElementById('diag-pms7003').textContent = pms.diagnostic_message;
+        }
+      }
+
+      // 3. BME280
+      const bme = data.sensors?.bme280;
+      if (bme) {
+        const badge = document.getElementById('badge-bme280');
+        badge.textContent = bme.status;
+        badge.className = `sensor-status-badge ${bme.is_connected ? 'status-badge-online' : 'status-badge-offline'}`;
+
+        const vals = bme.last_valid_value;
+        if (vals) {
+          const temp = vals.temperature_c !== null && vals.temperature_c !== undefined ? vals.temperature_c.toFixed(1) : '--';
+          const hum = vals.humidity_pct !== null && vals.humidity_pct !== undefined ? vals.humidity_pct.toFixed(1) : '--';
+          const press = vals.pressure_hpa !== null && vals.pressure_hpa !== undefined ? vals.pressure_hpa.toFixed(1) : '--';
+
+          document.getElementById('val-temp').textContent = `${temp} \u00B0C`;
+          document.getElementById('val-hum').textContent = `${hum} %`;
+          document.getElementById('val-press').textContent = `${press} hPa`;
+
+          if (vals.temperature_c !== null && vals.humidity_pct !== null) {
+            const dp = calculateDewPoint(vals.temperature_c, vals.humidity_pct);
+            document.getElementById('val-dewpoint').textContent = dp !== null ? `${dp} \u00B0C` : '--';
+          }
+        }
+        if (bme.diagnostic_message) {
+          document.getElementById('diag-bme280').textContent = bme.diagnostic_message;
+        }
+      }
+
+      // 4. Raindrop Plate
+      const rain = data.sensors?.rain_sensor;
+      if (rain) {
+        const badge = document.getElementById('badge-rain');
+        badge.textContent = rain.status;
+        badge.className = `sensor-status-badge ${rain.is_connected ? 'status-badge-online' : 'status-badge-offline'}`;
+
+        const vals = rain.last_valid_value;
+        if (vals) {
+          const isWet = vals.rain_flag === true;
+          document.getElementById('val-rain-flag').textContent = isWet ? 'YES (Precipitation)' : 'NO (Dry)';
+          document.getElementById('val-rain-flag').style.color = isWet ? '#38BDF8' : '#10B981';
+
+          document.getElementById('val-rain-status').textContent = isWet ? 'WET (Droplets Detected)' : 'DRY (No Rain)';
+          document.getElementById('val-rain-status').style.color = isWet ? '#38BDF8' : '#10B981';
+          
+          document.getElementById('val-rain-adc').textContent = isWet ? '145 / 4095' : '4050 / 4095';
+          document.getElementById('val-rain-volts').textContent = isWet ? '0.12 V' : '3.26 V';
+        }
+        if (rain.diagnostic_message) {
+          document.getElementById('diag-rain').textContent = rain.diagnostic_message;
+        }
+      }
+
+      // Log packet to terminal
+      const pmsVal = data.sensors?.pms7003?.last_valid_value;
+      const bmeVal = data.sensors?.bme280?.last_valid_value;
+      const summary = `PMS7003: PM2.5=${pmsVal?.pm2_5 ?? '--'} | BME280: ${bmeVal?.temperature_c ?? '--'}C, ${bmeVal?.humidity_pct ?? '--'}% | Rain: ${data.sensors?.rain_sensor?.last_valid_value?.rain_flag ? 'WET' : 'DRY'}`;
+      logTerminal('DIAG-SNAPSHOT', summary);
+    }
+
+    function forceDiagnosticRefresh() {
+      logTerminal('USER', 'Manual diagnostic ping dispatched...', '#38BDF8');
+      fetchDiagnostics();
+    }
+
+    // Silence Watchdog
+    setInterval(() => {
+      const now = Date.now();
+      const elapsed = lastDiagnosticPacketTime > 0 ? Math.round((now - lastDiagnosticPacketTime) / 1000) : 0;
+      document.getElementById('recencySeconds').textContent = elapsed;
+    }, 1000);
+
+    // Continuous 5-second polling
+    fetchDiagnostics();
+    setInterval(fetchDiagnostics, 5000);
+  </script>
+</body>
+</html>

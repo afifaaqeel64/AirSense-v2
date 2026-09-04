@@ -1,0 +1,23 @@
+Key files to create:
+
+docker-compose.yml
+docker-compose.prod.yml
+backend/ - FastAPI app
+backend/requirements.txt
+backend/Dockerfile
+backend/app/main.py
+backend/app/core/config.py
+backend/app/core/security.py
+backend/app/api/v1/ - all endpoints
+backend/app/db/timescale.py
+backend/app/db/redis_client.py
+backend/app/ml/ - ML pipeline
+backend/app/services/ - business logic
+backend/tasks/ - Celery tasks
+airflow/dags/ - Airflow DAGs
+ml/models/ - model training scripts
+nginx/nginx.conf
+monitoring/prometheus.yml
+db/init.sql
+.env.example
+Makefile

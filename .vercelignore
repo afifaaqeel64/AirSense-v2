@@ -1,0 +1,24 @@
+.venv
+venv
+ENV
+__pycache__
+.pytest_cache
+.pip_cache
+*.zip
+*.docx
+*.pdf
+*.bin
+.agents
+.git
+tests
+docs
+ml
+alembic
+services
+apps/api
+apps/web_enterprise
+CP210x_Driver
+BUDGET APPENDIX
+AirSense_Deployable_Platform
+Campus Deployment - LATEST
+Wokwi Simulation Practice

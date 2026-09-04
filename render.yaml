@@ -1,0 +1,46 @@
+# ==============================================================================
+# AirSense Pakistan - Render 1-Click Cloud Infrastructure (render.yaml)
+# Deployable on BOTH Render Free Tier ($0/mo) and Starter Tier
+# ==============================================================================
+services:
+  - type: web
+    name: airsense-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: sh -c "uvicorn apps.api.main:app --host 0.0.0.0 --port ${PORT:-8000}"
+    plan: free # Change to starter for 24/7 dedicated instance without sleep
+    region: singapore
+    healthCheckPath: /api/v1/health/liveness
+    envVars:
+      - key: AIR_SENSE_ENV
+        value: production
+      - key: AIR_SENSE_TIMEZONE
+        value: Asia/Karachi
+      - key: DATABASE_URL
+        fromDatabase:
+          name: airsense-db
+          property: connectionString
+      - key: ADMIN_API_TOKEN
+        generateValue: true
+      - key: DEVICE_TOKEN_SALT
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://airsense-team.vercel.app,http://localhost:3000,http://127.0.0.1:8000
+      - key: BACKGROUND_SCHEDULER_ENABLED
+        value: "true"
+      - key: SECURITY_HEADERS_ENABLED
+        value: "true"
+      - key: RATE_LIMIT_ENABLED
+        value: "true"
+    # To enable persistent disk on paid tier, change plan to 'starter' and uncomment below:
+    # disk:
+    #   name: airsense-data
+    #   mountPath: /app/data
+    #   sizeGB: 10
+
+databases:
+  - name: airsense-db
+    plan: free # Free PostgreSQL database provided by Render
+    region: singapore
+    databaseName: airsense
+    user: airsense

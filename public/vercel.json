@@ -1,0 +1,45 @@
+{
+  "version": 2,
+  "public": true,
+  "name": "airsense-team",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "routes": [
+    {
+      "src": "/hardware",
+      "dest": "/hardware.html"
+    },
+    {
+      "src": "/opensource",
+      "dest": "/opensource.html"
+    },
+    {
+      "src": "/command",
+      "dest": "/command.html"
+    },
+    {
+      "src": "/ops",
+      "dest": "/command.html"
+    },
+    {
+      "src": "/diagnostics",
+      "dest": "/diagnostics.html"
+    },
+    {
+      "src": "/sensor-health",
+      "dest": "/diagnostics.html"
+    },
+    {
+      "src": "/enterprise",
+      "dest": "/enterprise.html"
+    },
+    {
+      "src": "/",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
+}

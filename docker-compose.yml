@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: airsense-api
+    ports:
+      - "8000:8000"
+    environment:
+      - AIR_SENSE_ENV=production
+      - AIR_SENSE_TIMEZONE=Asia/Karachi
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://airsense:${DB_PASSWORD:-airsense_db_pass}@db:5432/airsense}
+      - ISLAMABAD_CONTACT_NAME=Muhammad M. Qureshi
+      - KARACHI_CONTACT_NAME=Areesha
+      - ADMIN_API_TOKEN=${ADMIN_API_TOKEN:-airsense_prod_admin_secret_token_2026}
+      - DEVICE_TOKEN_SALT=${DEVICE_TOKEN_SALT:-airsense_prod_device_salt_2026}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://airsense-team.vercel.app,http://localhost:3000}
+      - BACKGROUND_SCHEDULER_ENABLED=True
+      - SECURITY_HEADERS_ENABLED=True
+      - RATE_LIMIT_ENABLED=True
+      - BACKUP_RETENTION_COUNT=14
+    volumes:
+      - ./data/models:/app/data/models
+      - ./data/imports:/app/data/imports
+      - ./data/exports:/app/data/exports
+      - ./data/backups:/app/data/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+
+  db:
+    image: postgres:15-alpine
+    container_name: airsense-db
+    environment:
+      POSTGRES_DB: airsense
+      POSTGRES_USER: airsense
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-airsense_db_pass}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airsense -d airsense"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

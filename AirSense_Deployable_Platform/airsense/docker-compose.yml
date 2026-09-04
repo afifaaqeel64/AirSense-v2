@@ -1,0 +1,298 @@
+version: '3.9'
+
+x-common-env: &common-env
+  DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://airsense:${DB_PASSWORD:-airsense123}@timescaledb:5432/airsense}
+  DATABASE_URL_SYNC: ${DATABASE_URL_SYNC:-postgresql://airsense:${DB_PASSWORD:-airsense123}@timescaledb:5432/airsense}
+  REDIS_URL: redis://redis:6379/0
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  OPENAQ_API_KEY: ${OPENAQ_API_KEY:-}
+  WAQI_TOKEN: ${WAQI_TOKEN:-}
+  IQAIR_API_KEY: ${IQAIR_API_KEY:-}
+  OWM_API_KEY: ${OWM_API_KEY:-}
+  NASA_FIRMS_KEY: ${NASA_FIRMS_KEY:-}
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}
+  SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  ENVIRONMENT: ${ENVIRONMENT:-development}
+
+services:
+
+  # ──────────────────────────────────────────
+  # DATABASES
+  # ──────────────────────────────────────────
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: airsense-timescaledb
+    environment:
+      POSTGRES_DB: airsense
+      POSTGRES_USER: airsense
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-airsense123}
+      POSTGRES_MULTIPLE_DATABASES: airsense,mlflow,airflow
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./db/multi_db.sh:/docker-entrypoint-initdb.d/00_multi_db.sh
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airsense -d airsense"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: airsense-redis
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
+
+  # ──────────────────────────────────────────
+  # BACKEND API
+  # ──────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: airsense-api
+    environment:
+      <<: *common-env
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ──────────────────────────────────────────
+  # CELERY WORKERS
+  # ──────────────────────────────────────────
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: airsense-celery-worker
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=4 -Q default,data,ml
+    environment:
+      <<: *common-env
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: airsense-celery-beat
+    command: celery -A tasks.celery_app beat --loglevel=info --scheduler celery.beat:PersistentScheduler
+    environment:
+      <<: *common-env
+    depends_on:
+      - redis
+    volumes:
+      - ./backend:/app
+      - celerybeat_data:/tmp/celerybeat
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: airsense-flower
+    command: celery -A tasks.celery_app flower --port=5555 --basic_auth=${FLOWER_USER:-admin}:${FLOWER_PASSWORD:-admin}
+    environment:
+      <<: *common-env
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────
+  # ML PLATFORM
+  # ──────────────────────────────────────────
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.13.0
+    container_name: airsense-mlflow
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri postgresql://airsense:${DB_PASSWORD:-airsense123}@timescaledb:5432/mlflow
+      --default-artifact-root /mlflow/artifacts
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    volumes:
+      - mlflow_artifacts:/mlflow/artifacts
+    ports:
+      - "5000:5000"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────
+  # AIRFLOW (ML Orchestration)
+  # ──────────────────────────────────────────
+  airflow-webserver:
+    image: apache/airflow:2.9.1-python3.11
+    container_name: airsense-airflow-web
+    command: webserver
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airsense:${DB_PASSWORD:-airsense123}@timescaledb:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/1
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airsense:${DB_PASSWORD:-airsense123}@timescaledb:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
+      AIRFLOW__WEBSERVER__SECRET_KEY: ${AIRFLOW_SECRET:-airsense-airflow}
+      _AIRFLOW_WWW_USER_CREATE: "true"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./backend:/opt/airsense/backend
+      - airflow_logs:/opt/airflow/logs
+    ports:
+      - "8080:8080"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      retries: 5
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.1-python3.11
+    container_name: airsense-airflow-scheduler
+    command: scheduler
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airsense:${DB_PASSWORD:-airsense123}@timescaledb:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/1
+      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-}
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./backend:/opt/airsense/backend
+      - airflow_logs:/opt/airflow/logs
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────
+  # FRONTEND
+  # ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: airsense-frontend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────
+  # REVERSE PROXY
+  # ──────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: airsense-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - certbot_data:/var/www/certbot:ro
+      - nginx_logs:/var/log/nginx
+    depends_on:
+      - api
+      - frontend
+    restart: unless-stopped
+
+  # ──────────────────────────────────────────
+  # MONITORING
+  # ──────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: airsense-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: airsense-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-airsense123}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: grafana-clock-panel,grafana-worldmap-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  timescale_data:
+  redis_data:
+  mlflow_artifacts:
+  airflow_logs:
+  grafana_data:
+  prometheus_data:
+  celerybeat_data:
+  certbot_data:
+  nginx_logs:
+
+networks:
+  default:
+    name: airsense-network
+    driver: bridge

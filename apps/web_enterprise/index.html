@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AirSense — Environmental Risk Intelligence &amp; Decision Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Paho MQTT WebSocket Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+<style>
+/* ═══════════════════════════════════════════════
+   CSS CUSTOM PROPERTIES — DUAL THEME
+═══════════════════════════════════════════════ */
+:root {
+  --ff:'Manrope',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --orange:#D94E1A;--orange-lt:#F26540;--orange-bg:rgba(217,78,26,0.08);--orange-bd:rgba(217,78,26,0.2);
+  --teal:#0B7A65;--teal-lt:#0EA882;--teal-bg:rgba(11,122,101,0.08);--teal-bd:rgba(11,122,101,0.2);
+  --amber:#B07800;--amber-bg:rgba(176,120,0,0.09);--amber-bd:rgba(176,120,0,0.22);
+  --red:#B91C1C;--red-bg:rgba(185,28,28,0.08);--red-bd:rgba(185,28,28,0.2);
+  --sky:#1565C0;--sky-bg:rgba(21,101,192,0.08);--sky-bd:rgba(21,101,192,0.2);
+  --purple:#6B21A8;--purple-bg:rgba(107,33,168,0.08);
+  --cyan:#00F0FF;--cyan-bg:rgba(0,240,255,0.08);--cyan-bd:rgba(0,240,255,0.2);
+  --sz-sb:256px;
+}
+[data-theme="light"] {
+  --bg:#F5F3EE;--bg2:#EDE9E0;--bg3:#E3DFD5;
+  --surface:#FFFFFF;--surface2:#F9F7F3;--surface3:#F2EFE8;
+  --t1:#1A1714;--t2:#3D3830;--t3:#6B6358;--t4:#9B9488;
+  --border:#DDD9CF;--border2:#C8C3B5;
+  --sh:0 1px 3px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04);
+  --sh2:0 2px 8px rgba(0,0,0,0.08),0 12px 32px rgba(0,0,0,0.06);
+  --sidebar-bg:#FFFFFF;--sidebar-t:#1A1714;--sidebar-t2:#6B6358;
+  --topbar-bg:rgba(255,255,255,0.96);
+}
+[data-theme="dark"] {
+  --bg:#0E1117;--bg2:#141820;--bg3:#1C2232;
+  --surface:#161B26;--surface2:#1C2235;--surface3:#222840;
+  --t1:#EDE8E0;--t2:#B8B0A4;--t3:#7A7268;--t4:#4A4440;
+  --border:#252D40;--border2:#303850;
+  --sh:0 1px 4px rgba(0,0,0,0.3),0 4px 20px rgba(0,0,0,0.25);
+  --sh2:0 4px 12px rgba(0,0,0,0.4),0 16px 40px rgba(0,0,0,0.35);
+  --sidebar-bg:#111620;--sidebar-t:#EDE8E0;--sidebar-t2:#7A7268;
+  --topbar-bg:rgba(14,17,23,0.97);
+  --orange:#F26540;--orange-lt:#FF8A5E;
+  --teal:#0DB892;--teal-lt:#14D4AA;
+  --amber:#D4A000;
+  --red:#EF4444;
+}
+
+/* ═══════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;scroll-behavior:smooth}
+body{font-family:var(--ff);background:var(--bg);color:var(--t1);line-height:1.55;overflow-x:hidden;transition:background .3s,color .3s}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+/* ═══════════════════════════════════════════════
+   LOADING SCREEN
+═══════════════════════════════════════════════ */
+#loading{
+  position:fixed;inset:0;z-index:9999;
+  background:linear-gradient(145deg,#0E1520 0%,#111B2E 60%,#0A1018 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  transition:opacity .6s ease,transform .6s ease;
+}
+#loading.out{opacity:0;pointer-events:none}
+.ld-logo{font-family:var(--ff);font-size:clamp(2.8rem,6vw,4.5rem);font-weight:800;color:#fff;letter-spacing:-.03em;margin-bottom:.2em}
+.ld-logo span{color:var(--orange-lt)}
+.ld-tag{font-size:clamp(.78rem,1.5vw,.95rem);color:rgba(255,255,255,0.5);letter-spacing:.06em;font-weight:500;text-transform:uppercase;margin-bottom:3em;text-align:center;padding:0 20px;}
+.ld-bar-wrap{width:min(340px,65vw);height:3px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;margin-bottom:14px}
+.ld-bar{height:100%;width:0%;background:linear-gradient(90deg,var(--orange-lt),var(--teal-lt));border-radius:3px;transition:width .05s linear}
+.ld-terminal{font-family:var(--mono);font-size:11px;color:var(--teal-lt);letter-spacing:.04em}
+
+/* ═══════════════════════════════════════════════
+   PROFILE SELECTOR
+═══════════════════════════════════════════════ */
+#profileSel{
+  position:fixed;inset:0;z-index:9998;
+  background:var(--bg);display:none;
+  flex-direction:column;align-items:center;justify-content:center;padding:24px;
+}
+#profileSel.show{display:flex}
+.ps-logo{font-size:2.2rem;font-weight:800;color:var(--t1);letter-spacing:-.02em;margin-bottom:.2em}
+.ps-logo span{color:var(--orange)}
+.ps-sub{color:var(--t3);font-size:.88rem;margin-bottom:2.8em;text-align:center}
+.ps-cards{display:flex;gap:24px;flex-wrap:wrap;justify-content:center}
+.ps-card{
+  width:min(340px,88vw);background:var(--surface);border:2px solid var(--border);
+  border-radius:18px;padding:36px 28px;cursor:pointer;transition:all .3s;
+  display:flex;flex-direction:column;align-items:flex-start;box-shadow:var(--sh);
+}
+.ps-card:hover{border-color:var(--orange);box-shadow:var(--sh2);transform:translateY(-3px)}
+.ps-card.gov:hover{border-color:var(--teal)}
+.ps-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;margin-bottom:20px}
+.ps-card.biz .ps-icon{background:var(--orange-bg)}
+.ps-card.gov .ps-icon{background:var(--teal-bg)}
+.ps-card h2{font-size:1.25rem;font-weight:700;color:var(--t1);margin-bottom:8px}
+.ps-card p{font-size:.82rem;color:var(--t3);line-height:1.65;margin-bottom:20px}
+.ps-btn{padding:10px 22px;border-radius:8px;font-size:.82rem;font-weight:700;border:none;cursor:pointer;font-family:var(--ff);transition:opacity .2s;letter-spacing:.02em}
+.ps-card.biz .ps-btn{background:var(--orange);color:#fff}
+.ps-card.gov .ps-btn{background:var(--teal);color:#fff}
+.ps-btn:hover{opacity:.88}
+
+/* ═══════════════════════════════════════════════
+   APP SHELL & SIDEBAR
+═══════════════════════════════════════════════ */
+.app-shell{display:none;min-height:100vh}
+.app-shell.active{display:flex}
+.sidebar{
+  position:fixed;left:0;top:0;bottom:0;width:var(--sz-sb);
+  background:var(--sidebar-bg);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:200;overflow-y:auto;transition:background .3s;
+}
+.sb-head{padding:20px 18px 16px;border-bottom:1px solid var(--border)}
+.sb-logo{font-size:1.2rem;font-weight:800;color:var(--sidebar-t);letter-spacing:-.02em}
+.sb-logo span{color:var(--orange)}
+.sb-profile{display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 10px;border-radius:20px;font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
+.sb-profile.biz{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-bd)}
+.sb-profile.gov{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
+
+.sb-hardware-badge{
+  display:flex;align-items:center;gap:8px;margin-top:10px;padding:6px 10px;
+  background:rgba(0,240,255,0.06);border-radius:6px;border:1px solid rgba(0,240,255,0.2);
+}
+.live-dot-green{
+  width:7px;height:7px;border-radius:50%;background:#10B981;box-shadow:0 0 6px #10B981;
+  animation:blink 1.5s ease infinite;flex-shrink:0;
+}
+.sb-hw-lbl{font-size:.68rem;color:var(--cyan);font-family:var(--mono);font-weight:700;}
+.sb-hw-val{margin-left:auto;font-size:.72rem;color:#10B981;font-family:var(--mono);font-weight:700;}
+
+.sb-section{padding:14px 18px 4px;font-size:.6rem;font-weight:700;color:var(--t4);letter-spacing:.15em;text-transform:uppercase;font-family:var(--mono)}
+.sb-sep{height:1px;background:var(--border);margin:8px 14px}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:9px 18px;
+  cursor:pointer;font-size:.82rem;font-weight:500;color:var(--sidebar-t2);
+  border-left:3px solid transparent;transition:all .2s;margin:1px 0;
+}
+.nav-item:hover{color:var(--sidebar-t);background:var(--bg2)}
+.nav-item.active{color:var(--orange);border-left-color:var(--orange);background:var(--orange-bg);font-weight:600}
+.nav-item.active.gov-nav{color:var(--teal);border-left-color:var(--teal);background:var(--teal-bg)}
+.nav-icon{font-size:15px;width:20px;text-align:center;flex-shrink:0}
+.nav-badge{margin-left:auto;padding:1px 7px;border-radius:10px;font-size:.6rem;font-weight:700;font-family:var(--mono)}
+.nb-red{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
+.nb-amber{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
+.nb-teal{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
+.sb-footer{margin-top:auto;padding:14px 18px;border-top:1px solid var(--border);font-size:.7rem;color:var(--t4);font-family:var(--mono)}
+.switch-profile-btn{width:100%;padding:8px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;font-size:.72rem;color:var(--t3);cursor:pointer;font-family:var(--ff);transition:all .2s;margin-bottom:8px;font-weight:500}
+.switch-profile-btn:hover{border-color:var(--border2);color:var(--t1)}
+
+/* ═══════════════════════════════════════════════
+   TOPBAR
+═══════════════════════════════════════════════ */
+.topbar{
+  position:fixed;left:var(--sz-sb);right:0;top:0;height:52px;
+  background:var(--topbar-bg);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 22px;gap:12px;z-index:100;
+  backdrop-filter:blur(12px);
+}
+.tb-title{font-size:.88rem;font-weight:700;color:var(--t1);flex:1}
+.tb-sector-sel{padding:6px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;font-size:.78rem;color:var(--t1);font-family:var(--ff);cursor:pointer;outline:none;display:none}
+.tb-sector-sel option{background:var(--surface)}
+.aqi-badge{padding:5px 14px;border-radius:20px;font-size:.72rem;font-weight:700;font-family:var(--mono);letter-spacing:.04em;border:1px solid}
+.tb-time{font-family:var(--mono);font-size:.72rem;color:var(--t3)}
+.theme-btn{width:32px;height:32px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:all .2s;flex-shrink:0}
+.theme-btn:hover{border-color:var(--border2)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:blink 2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ═══════════════════════════════════════════════
+   MAIN CONTENT
+═══════════════════════════════════════════════ */
+.main{margin-left:var(--sz-sb);margin-top:52px;padding:24px;min-height:calc(100vh - 52px)}
+.sec-page{display:none}.sec-page.active{display:block;animation:fadeIn .3s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.ph{margin-bottom:22px}
+.ph-title{font-size:1.3rem;font-weight:800;color:var(--t1);letter-spacing:-.01em;margin-bottom:4px}
+.ph-sub{font-size:.8rem;color:var(--t3);line-height:1.5}
+
+/* ═══════════════════════════════════════════════
+   CARDS & GRIDS
+═══════════════════════════════════════════════ */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:13px;padding:20px;box-shadow:var(--sh);transition:box-shadow .2s}
+.card:hover{box-shadow:var(--sh2)}
+.card.accent-orange{border-color:var(--orange-bd);background:color-mix(in srgb,var(--surface) 96%,var(--orange) 4%)}
+.card.accent-teal{border-color:var(--teal-bd);background:color-mix(in srgb,var(--surface) 96%,var(--teal) 4%)}
+.card.accent-red{border-color:var(--red-bd);background:color-mix(in srgb,var(--surface) 97%,var(--red) 3%)}
+.card.accent-amber{border-color:var(--amber-bd)}
+.card-title{font-size:.72rem;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.1em;font-family:var(--mono);margin-bottom:14px}
+
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:13px}
+.g-main{display:grid;grid-template-columns:1.35fr 1fr;gap:16px}
+.g-main2{display:grid;grid-template-columns:1fr 1.35fr;gap:16px}
+@media(max-width:1280px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr 1fr}.g-main,.g-main2{grid-template-columns:1fr}}
+@media(max-width:900px){.g2{grid-template-columns:1fr}}
+
+/* ═══════════════════════════════════════════════
+   KPI TILES
+═══════════════════════════════════════════════ */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px}
+@media(max-width:1100px){.kpi-row{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden;box-shadow:var(--sh);transition:all .2s}
+.kpi:hover{box-shadow:var(--sh2);border-color:var(--border2)}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.kpi.kpi-orange::before{background:var(--orange)}
+.kpi.kpi-teal::before{background:var(--teal)}
+.kpi.kpi-amber::before{background:var(--amber)}
+.kpi.kpi-sky::before{background:var(--sky)}
+.kpi.kpi-red::before{background:var(--red)}
+.kpi.kpi-cyan::before{background:var(--cyan)}
+.kpi-label{font-size:.7rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.08em;font-family:var(--mono);margin-bottom:6px}
+.kpi-value{font-family:var(--mono);font-size:clamp(1.4rem,2.2vw,1.9rem);font-weight:700;color:var(--t1);line-height:1;margin-bottom:4px}
+.kpi-sub{font-size:.72rem;color:var(--t3);line-height:1.4}
+.kpi-delta{display:inline-block;padding:2px 8px;border-radius:8px;font-family:var(--mono);font-size:.65rem;font-weight:700;margin-top:5px}
+.delta-up{background:var(--red-bg);color:var(--red)}
+.delta-dn{background:var(--teal-bg);color:var(--teal)}
+.delta-neu{background:var(--amber-bg);color:var(--amber)}
+.delta-cyan{background:var(--cyan-bg);color:var(--cyan)}
+
+/* ═══════════════════════════════════════════════
+   PROGRESS BARS & STRIPS
+═══════════════════════════════════════════════ */
+.pbar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.pbar-lbl{font-size:.77rem;color:var(--t2);flex-shrink:0;font-weight:500}
+.pbar-lbl.w140{width:140px}
+.pbar-lbl.w180{width:180px}
+.pbar-track{flex:1;height:8px;background:var(--bg2);border-radius:4px;overflow:hidden}
+.pbar-fill{height:100%;border-radius:4px;transition:width 1.1s cubic-bezier(.16,1,.3,1)}
+.pf-orange{background:linear-gradient(90deg,var(--orange),var(--orange-lt))}
+.pf-teal{background:linear-gradient(90deg,var(--teal),var(--teal-lt))}
+.pf-amber{background:linear-gradient(90deg,var(--amber),#E0A000)}
+.pf-red{background:linear-gradient(90deg,var(--red),#F87171)}
+.pf-sky{background:linear-gradient(90deg,var(--sky),#2589C7)}
+.pbar-val{font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--t2);width:40px;text-align:right}
+
+.forecast-strip{display:grid;grid-template-columns:repeat(10,1fr);gap:8px;margin-bottom:18px}
+@media(max-width:1100px){.forecast-strip{grid-template-columns:repeat(5,1fr)}}
+.fc-day{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:12px 8px;text-align:center;transition:all .2s;cursor:default}
+.fc-day:hover{border-color:var(--border2);box-shadow:var(--sh)}
+.fc-day.today{border-color:var(--orange-bd);background:var(--orange-bg)}
+.fc-day.critical{border-color:var(--red-bd);background:var(--red-bg)}
+.fc-day.warning{border-color:var(--amber-bd);background:var(--amber-bg)}
+.fc-day-label{font-size:.62rem;color:var(--t3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.fc-icon{font-size:1.3rem;margin-bottom:4px}
+.fc-pm25{font-family:var(--mono);font-size:1.05rem;font-weight:700;color:var(--t1);margin-bottom:3px}
+.fc-category{font-size:.58rem;font-weight:700;padding:2px 6px;border-radius:6px;font-family:var(--mono)}
+.fc-policy{font-size:.6rem;color:var(--red);font-weight:600;margin-top:4px;display:none}
+.fc-day.critical .fc-policy{display:block}
+
+/* ═══════════════════════════════════════════════
+   ALERT ITEMS
+═══════════════════════════════════════════════ */
+.alert-item{display:flex;gap:12px;padding:13px 15px;border-radius:10px;margin-bottom:9px;border:1px solid;position:relative}
+.ai-critical{background:var(--red-bg);border-color:var(--red-bd)}
+.ai-warning{background:var(--amber-bg);border-color:var(--amber-bd)}
+.ai-advisory{background:var(--orange-bg);border-color:var(--orange-bd)}
+.ai-info{background:var(--teal-bg);border-color:var(--teal-bd)}
+.ai-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.ai-dot.red{background:var(--red);box-shadow:0 0 8px var(--red)}
+.ai-dot.amber{background:var(--amber);box-shadow:0 0 8px var(--amber)}
+.ai-dot.orange{background:var(--orange);box-shadow:0 0 7px var(--orange)}
+.ai-dot.teal{background:var(--teal)}
+.ai-body h4{font-size:.82rem;font-weight:700;color:var(--t1);margin-bottom:3px}
+.ai-body p{font-size:.76rem;color:var(--t2);line-height:1.55}
+.ai-body .ai-action{font-size:.74rem;font-weight:600;color:var(--t1);margin-top:6px;padding:6px 10px;background:var(--surface);border-radius:7px;border:1px solid var(--border);display:inline-block}
+.ai-saving{position:absolute;right:14px;top:13px;font-family:var(--mono);font-size:.72rem;font-weight:700;color:var(--teal);background:var(--teal-bg);border:1px solid var(--teal-bd);padding:3px 10px;border-radius:8px}
+.ai-tag{font-family:var(--mono);font-size:.6rem;font-weight:700;padding:2px 8px;border-radius:10px;display:inline-block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
+.tag-critical{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
+.tag-warning{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
+.tag-advisory{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-bd)}
+.tag-info{background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)}
+
+/* ═══════════════════════════════════════════════
+   FINANCIAL CALCULATOR
+═══════════════════════════════════════════════ */
+.calc-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:18px}
+.fg{display:flex;flex-direction:column;gap:5px}
+.fg label{font-size:.72rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.07em;font-family:var(--mono)}
+.fg input,.fg select{padding:9px 13px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:.84rem;color:var(--t1);font-family:var(--ff);outline:none;transition:border-color .2s;width:100%}
+.fg input:focus,.fg select:focus{border-color:var(--orange)}
+.fg select option{background:var(--surface)}
+.calc-btn{width:100%;padding:12px;background:var(--orange);color:#fff;border:none;border-radius:9px;font-size:.88rem;font-weight:700;cursor:pointer;font-family:var(--ff);transition:opacity .2s;margin-top:4px;letter-spacing:.02em}
+.calc-btn:hover{opacity:.88}
+.roi-banner{background:linear-gradient(135deg,var(--t1) 0%,color-mix(in srgb,var(--t1) 85%,transparent) 100%);border-radius:13px;padding:24px 22px;margin-bottom:18px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.roi-main{text-align:center}
+.roi-num{font-family:var(--mono);font-size:3.2rem;font-weight:700;color:var(--orange-lt);line-height:1}
+.roi-sub{font-size:.72rem;color:rgba(255,255,255,.5);margin-top:3px}
+.result-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+.res-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center}
+.res-val{font-family:var(--mono);font-size:1.35rem;font-weight:700;color:var(--t1);margin-bottom:3px}
+.res-lbl{font-size:.7rem;color:var(--t3)}
+
+/* ═══════════════════════════════════════════════
+   MAP & TABLES
+═══════════════════════════════════════════════ */
+#mapContainer{height:520px;border-radius:12px;overflow:hidden;border:1px solid var(--border)}
+.map-controls{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+.map-ctrl-btn{padding:6px 14px;border:1px solid var(--border);border-radius:7px;background:var(--surface2);color:var(--t1);font-size:.75rem;cursor:pointer;font-family:var(--ff);font-weight:500;transition:all .2s}
+.map-ctrl-btn.active,.map-ctrl-btn:hover{background:var(--teal-bg);border-color:var(--teal-bd);color:var(--teal)}
+.map-legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.ml-item{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--t2)}
+.ml-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+
+.policy-table{width:100%;border-collapse:collapse;font-size:.8rem}
+.policy-table th{padding:9px 12px;text-align:left;font-family:var(--mono);font-size:.65rem;color:var(--t3);font-weight:500;letter-spacing:.08em;text-transform:uppercase;border-bottom:2px solid var(--border);background:var(--bg2)}
+.policy-table td{padding:10px 12px;border-bottom:1px solid var(--bg2);color:var(--t2);vertical-align:middle}
+.policy-table tr:hover td{background:var(--bg2)}
+
+/* SECTOR TABS */
+.sector-tabs{display:flex;gap:5px;margin-bottom:18px;background:var(--surface2);padding:4px;border-radius:10px;border:1px solid var(--border);overflow-x:auto}
+.st-btn{padding:7px 16px;border-radius:7px;font-size:.78rem;font-weight:500;cursor:pointer;border:none;background:none;color:var(--t3);transition:all .2s;white-space:nowrap;font-family:var(--ff)}
+.st-btn:hover{color:var(--t1);background:var(--bg2)}
+.st-btn.active{background:var(--surface);color:var(--orange);box-shadow:var(--sh);font-weight:700}
+
+/* TECHNICAL TABS */
+.tech-tabs{display:flex;gap:5px;margin-bottom:18px;background:var(--surface2);padding:4px;border-radius:10px;border:1px solid var(--border);overflow-x:auto}
+.tt-btn{padding:7px 16px;border-radius:7px;font-size:.78rem;cursor:pointer;border:none;background:none;color:var(--t3);font-family:var(--ff);font-weight:500;white-space:nowrap;transition:all .2s}
+.tt-btn.active{background:var(--surface);color:var(--t1);box-shadow:var(--sh);font-weight:600}
+.tt-btn:hover:not(.active){color:var(--t1)}
+.tt-content{display:none}.tt-content.active{display:block}
+.code-blk{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:14px 16px;font-family:var(--mono);font-size:.76rem;overflow-x:auto;white-space:pre;color:var(--t2);line-height:1.7;margin:10px 0}
+.kw{color:var(--purple)}.str{color:var(--teal)}.cmt{color:var(--t4)}.num{color:var(--amber)}
+
+/* MISC */
+.divider{height:1px;background:var(--border);margin:18px 0}
+.badge-pill{display:inline-block;padding:3px 10px;border-radius:10px;font-family:var(--mono);font-size:.64rem;font-weight:700;letter-spacing:.05em}
+.section-note{font-size:.78rem;color:var(--t3);background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 14px;margin-bottom:14px;line-height:1.6}
+canvas{display:block;width:100%!important}
+.chart-wrap{position:relative;width:100%}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--bg2)}
+.stat-row:last-child{border:none}
+.sr-key{font-size:.78rem;color:var(--t2)}
+.sr-val{font-family:var(--mono);font-size:.82rem;font-weight:600;color:var(--t1)}
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div id="loading">
+  <div class="ld-logo">Air<span>Sense</span></div>
+  <div class="ld-tag">Environmental Risk Intelligence for Business &amp; Government</div>
+  <div class="ld-bar-wrap"><div class="ld-bar" id="ldBar"></div></div>
+  <div class="ld-terminal" id="ldTerminal">Initializing multi-sensor uplink...</div>
+</div>
+
+<!-- PROFILE SELECTOR SCREEN -->
+<div id="profileSel">
+  <div class="ps-logo">Air<span>Sense</span></div>
+  <div class="ps-sub">Select your dashboard profile to access tailored intelligence</div>
+  <div class="ps-cards">
+    <div class="ps-card biz" onclick="launchApp('business')">
+      <div class="ps-icon">🏢</div>
+      <h2>Business Dashboard</h2>
+      <p>Sector-specific air quality intelligence, operational risk alerts, advance policy warnings, financial impact ROI analysis, and HVAC/fleet optimizations tailored to your industry.</p>
+      <button class="ps-btn">Enter Business Dashboard →</button>
+    </div>
+    <div class="ps-card gov" onclick="launchApp('government')">
+      <div class="ps-icon">🏛️</div>
+      <h2>Government Dashboard</h2>
+      <p>City-wide AQI monitoring, high-resolution satellite map intelligence, policy command centre, hospital surge predictions, industry compliance tracking, and enforcement intelligence.</p>
+      <button class="ps-btn" style="background:var(--teal)">Enter Government Dashboard →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     BUSINESS APP SHELL
+═══════════════════════════════════════════════ -->
+<div class="app-shell" id="bizApp">
+  <aside class="sidebar" id="bizSidebar">
+    <div class="sb-head">
+      <div class="sb-logo">Air<span>Sense</span></div>
+      <div class="sb-profile biz">🏢 Business Operations</div>
+      <div class="sb-hardware-badge">
+        <div class="live-dot-green"></div>
+        <span class="sb-hw-lbl">PHYSICAL SENSOR</span>
+        <span class="sb-hw-val" id="bizHwVal">9.0 µg</span>
+      </div>
+    </div>
+    <div class="sb-section">Operations</div>
+    <div class="nav-item active" onclick="bizNav('overview',this)"><div class="nav-icon">📊</div>My Overview</div>
+    <div class="nav-item" onclick="bizNav('forecast',this)"><div class="nav-icon">🔮</div>7-Day Forecast<div class="nav-badge nb-red" id="nb-alert">3 ALERTS</div></div>
+    <div class="nav-item" onclick="bizNav('sector',this)"><div class="nav-icon">🎯</div>Sector Intelligence</div>
+    <div class="sb-section">Finance &amp; Risk</div>
+    <div class="nav-item" onclick="bizNav('financial',this)"><div class="nav-icon">💰</div>Financial Impact</div>
+    <div class="nav-item" onclick="bizNav('policy',this)"><div class="nav-icon">📜</div>Policy Tracker<div class="nav-badge nb-amber">2 NEW</div></div>
+    <div class="sb-section">Intelligence</div>
+    <div class="nav-item" onclick="bizNav('news',this)"><div class="nav-icon">📰</div>News Feed</div>
+    <div class="sb-sep"></div>
+    <div class="sb-section">Technical Tools</div>
+    <div class="nav-item" onclick="bizNav('techdata',this)"><div class="nav-icon">🔬</div>Air Quality Data</div>
+    <div class="nav-item" onclick="bizNav('techanalytics',this)"><div class="nav-icon">📈</div>Analytics &amp; Models</div>
+    <div class="nav-item" onclick="bizNav('api',this)"><div class="nav-icon">⚡</div>API Hub</div>
+    <div class="sb-footer">
+      <button class="switch-profile-btn" onclick="switchProfile()">⇄ Switch Profile</button>
+      <div>AirSense · Beaconhouse International College</div>
+    </div>
+  </aside>
+
+  <div class="topbar">
+    <div class="tb-title" id="bizTopTitle">My Overview</div>
+    <select class="tb-sector-sel" id="sectorSel" onchange="updateSectorIntelligence(this.value)">
+      <option value="logistics">🚛 Transport &amp; Logistics</option>
+      <option value="manufacturing">🏭 Manufacturing &amp; Industry</option>
+      <option value="construction">🏗️ Construction &amp; Real Estate</option>
+      <option value="healthcare">🏥 Healthcare &amp; Pharma</option>
+      <option value="education">🎓 Education</option>
+      <option value="retail">🛒 Retail &amp; FMCG</option>
+    </select>
+    <div class="aqi-badge" id="bizAqiBadge" style="background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd)">PM2.5: 9.0 · SAFE (WHO COMPLIANT)</div>
+    <div class="tb-time" id="bizTime">—</div>
+    <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">☀️</button>
+    <div class="live-dot"></div>
+  </div>
+
+  <main class="main">
+
+    <!-- BIZ TAB: OVERVIEW -->
+    <div class="sec-page active" id="biz-overview">
+      <div class="ph"><div class="ph-title">Executive Briefing &amp; Real-Time Telemetry</div><div class="ph-sub">Karachi &amp; Islamabad Hubs · <span id="overviewDate">—</span> · Live ESP32 Ground Truth + Satellite Synced</div></div>
+      
+      <div class="kpi-row">
+        <div class="kpi kpi-cyan"><div class="kpi-label">Ground-Truth PM2.5</div><div class="kpi-value" id="kpiPM25Biz">9.0 μg/m³</div><div class="kpi-sub">Onsite Rooftop Laser Sensor</div><div class="kpi-delta delta-dn">↓ -4.2% Dilution</div></div>
+        <div class="kpi kpi-teal"><div class="kpi-label">Today's Risk Level</div><div class="kpi-value">TIER 1: SAFE</div><div class="kpi-sub">100% Outdoor Work Approved</div><div class="kpi-delta delta-dn">WHO 2021 Compliant</div></div>
+        <div class="kpi kpi-orange"><div class="kpi-label">Critical Day Ahead</div><div class="kpi-value">Day 5</div><div class="kpi-sub">Forecast: 267 μg/m³ — Hazardous</div><div class="kpi-delta delta-up">Policy action likely</div></div>
+        <div class="kpi kpi-teal"><div class="kpi-label">Potential Saving Today</div><div class="kpi-value">PKR 180K</div><div class="kpi-sub">Via Smart HVAC Economizer</div><div class="kpi-delta delta-dn">↑ Capture Energy Savings</div></div>
+      </div>
+
+      <div class="g-main">
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">10-Day PM2.5 Outlook at a Glance</div>
+            <div class="forecast-strip" id="ovForecast"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Active Alerts for Your Business</div>
+            <div id="overviewAlerts"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card">
+            <div class="card-title">Air Quality Right Now</div>
+            <div style="text-align:center;padding:12px 0">
+              <canvas id="gaugeCanvasBiz" width="200" height="120"></canvas>
+              <div style="font-family:var(--mono);font-size:2.4rem;font-weight:700;color:var(--teal);line-height:1;margin-top:-8px" id="bizGaugeVal">9.0</div>
+              <div style="font-size:.75rem;color:var(--t3);margin:4px 0">μg/m³ — PM2.5 Ground-Truth</div>
+              <div style="display:inline-block;padding:4px 14px;border-radius:20px;background:var(--teal-bg);color:var(--teal);font-family:var(--mono);font-size:.72rem;font-weight:700;border:1px solid var(--teal-bd)">EXCELLENT (TIER 1)</div>
+            </div>
+            <div class="divider"></div>
+            <div class="stat-row"><span class="sr-key">WHO Safe Limit</span><span class="sr-val">15.0 μg/m³</span></div>
+            <div class="stat-row"><span class="sr-key">Node Status</span><span class="sr-val" style="color:var(--teal)">AIRSENSE-NODE-KHI-01</span></div>
+            <div class="stat-row"><span class="sr-key">Surface Pressure</span><span class="sr-val" id="press-biz">1012.0 hPa</span></div>
+            <div class="stat-row"><span class="sr-key">Wind Dispersion</span><span class="sr-val" id="wind-biz">14 km/h SW (Sea Breeze)</span></div>
+            <div class="stat-row"><span class="sr-key">Rain Sensor</span><span class="sr-val" id="rain-biz">Dry (Normal)</span></div>
+          </div>
+
+          <div class="card accent-orange">
+            <div class="card-title">Your Annual Smog Cost</div>
+            <div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:var(--orange);line-height:1;margin-bottom:4px">PKR 10.8M</div>
+            <div style="font-size:.78rem;color:var(--t2);margin-bottom:12px">Average annual cost for your sector from air pollution disruptions</div>
+            <div style="font-size:.78rem;color:var(--t3)"><span style="color:var(--teal);font-weight:700">AirSense can save PKR 3.35M/year</span> — 14× return on subscription</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BIZ TAB: FORECAST -->
+    <div class="sec-page" id="biz-forecast">
+      <div class="ph"><div class="ph-title">7-Day PM2.5 Forecast &amp; Advance Alerts</div><div class="ph-sub">Forecasts generated by CatBoost &amp; MLR Bayesian Ensemble · Walk-Forward Validated</div></div>
+      <div class="section-note">⚡ <strong>Operational Directive:</strong> Review the 7-day outlook and act before critical periods arrive. Days marked <span style="color:var(--red)">HAZARDOUS</span> trigger government policy actions (road closures, industrial curtailment). Plan operations accordingly.</div>
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title">10-Day Forecast Strip</div>
+        <div class="forecast-strip" id="forecastStrip"></div>
+        <div style="margin-top:12px"><div class="chart-wrap" style="height:160px"><canvas id="forecastChart"></canvas></div></div>
+      </div>
+      <div class="g2">
+        <div class="card">
+          <div class="card-title">Advance Operational Alerts</div>
+          <div id="forecastAlerts"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Government Action Thresholds</div>
+          <table class="policy-table">
+            <thead><tr><th>PM2.5 Level</th><th>AQI</th><th>Typical Response</th><th>Business Impact</th></tr></thead>
+            <tbody>
+              <tr><td><span class="badge-pill" style="background:var(--teal-bg);color:var(--teal)">0–55 μg/m³</span></td><td>Good–Moderate</td><td>No restrictions</td><td>Normal operations</td></tr>
+              <tr><td><span class="badge-pill" style="background:var(--amber-bg);color:var(--amber)">55–150 μg/m³</span></td><td>Unhealthy</td><td>Health advisory issued</td><td>PPE required, outdoor staff alerted</td></tr>
+              <tr style="background:var(--red-bg)"><td><span class="badge-pill" style="background:var(--red-bg);color:var(--red)">200–250 μg/m³</span></td><td>Hazardous</td><td>Section 144, industry limits</td><td>Construction halted, fleet restricted</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- BIZ TAB: SECTOR INTELLIGENCE -->
+    <div class="sec-page" id="biz-sector">
+      <div class="ph"><div class="ph-title">Sector Intelligence</div><div class="ph-sub">Select your sector to see tailored operational insights, advance warnings, and specific recommended actions</div></div>
+      <div class="sector-tabs" id="sectorTabRow">
+        <button class="st-btn active" onclick="sectorTab('logistics',this)">🚛 Transport &amp; Logistics</button>
+        <button class="st-btn" onclick="sectorTab('manufacturing',this)">🏭 Manufacturing</button>
+        <button class="st-btn" onclick="sectorTab('construction',this)">🏗️ Construction</button>
+        <button class="st-btn" onclick="sectorTab('healthcare',this)">🏥 Healthcare</button>
+        <button class="st-btn" onclick="sectorTab('education',this)">🎓 Education</button>
+        <button class="st-btn" onclick="sectorTab('retail',this)">🛒 Retail &amp; FMCG</button>
+      </div>
+      <div id="sectorContent"></div>
+    </div>
+
+    <!-- BIZ TAB: FINANCIAL IMPACT -->
+    <div class="sec-page" id="biz-financial">
+      <div class="ph"><div class="ph-title">Financial Impact Analyser</div><div class="ph-sub">Calculate the exact PKR value AirSense delivers to your business based on your sector, size, and operations</div></div>
+      <div class="g-main2">
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Calculate Your ROI</div>
+            <div class="calc-grid">
+              <div class="fg"><label>Your Sector</label>
+                <select id="calc-sector">
+                  <option value="logistics">Transport &amp; Logistics</option>
+                  <option value="manufacturing">Manufacturing &amp; Industry</option>
+                  <option value="construction">Construction &amp; Real Estate</option>
+                  <option value="healthcare">Healthcare &amp; Pharma</option>
+                  <option value="education">Education</option>
+                  <option value="retail">Retail &amp; FMCG</option>
+                </select>
+              </div>
+              <div class="fg"><label>No. of Employees</label><input type="number" id="calc-emp" value="50" min="5" max="5000"></div>
+              <div class="fg"><label>Monthly Revenue (PKR)</label><input type="number" id="calc-rev" value="2500000" min="100000"></div>
+              <div class="fg"><label>Outdoor Workers %</label><input type="number" id="calc-outdoor" value="60" min="0" max="100"></div>
+              <div class="fg"><label>Fleet / Vehicles</label><input type="number" id="calc-fleet" value="20" min="0"></div>
+              <div class="fg"><label>AirSense Plan</label>
+                <select id="calc-plan">
+                  <option value="240000">SME — PKR 15K/month</option>
+                  <option value="480000" selected>Professional — PKR 40K/month</option>
+                  <option value="900000">Enterprise — PKR 75K/month</option>
+                </select>
+              </div>
+            </div>
+            <button class="calc-btn" onclick="calculateROI()">Calculate My Annual Savings &amp; ROI</button>
+          </div>
+          <div id="calcResults" style="display:none">
+            <div class="roi-banner">
+              <div><div style="font-size:.72rem;color:rgba(255,255,255,.45);margin-bottom:4px">ANNUAL SAVINGS WITH AIRSENSE</div><div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:var(--orange-lt)" id="rAnnSaving">—</div></div>
+              <div class="roi-main"><div class="roi-num" id="rROI">—</div><div class="roi-sub">Return on Investment</div></div>
+              <div style="text-align:right"><div style="font-size:.72rem;color:rgba(255,255,255,.45);margin-bottom:4px">BREAK-EVEN PERIOD</div><div style="font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--teal-lt)" id="rBreakEven">—</div></div>
+            </div>
+            <div class="result-grid">
+              <div class="res-card"><div class="res-val" id="rDisruptSave" style="color:var(--orange)">—</div><div class="res-lbl">Disruption Losses Avoided</div></div>
+              <div class="res-card"><div class="res-val" id="rComplianceSave" style="color:var(--teal)">—</div><div class="res-lbl">Compliance Fine Prevention</div></div>
+              <div class="res-card"><div class="res-val" id="rProdSave" style="color:var(--sky)">—</div><div class="res-lbl">Productivity Recovery</div></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">Market-Wide Cost Benchmark (Survey Data, n=127)</div>
+            <div class="chart-wrap" style="height:200px"><canvas id="costBenchChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BIZ TAB: POLICY TRACKER -->
+    <div class="sec-page" id="biz-policy">
+      <div class="ph"><div class="ph-title">Policy &amp; Regulatory Tracker</div><div class="ph-sub">Current and upcoming government policies that affect your business operations</div></div>
+      <div class="g2" style="margin-bottom:16px">
+        <div class="card accent-red">
+          <div class="card-title">⚠️ Imminent Policy Risk</div>
+          <div class="alert-item ai-critical" style="margin-bottom:0">
+            <div class="ai-dot red"></div>
+            <div class="ai-body">
+              <div class="ai-tag tag-critical">HIGH PROBABILITY</div>
+              <h4>Industrial Curtailment Order — Expected Day 5–6</h4>
+              <p>PM2.5 forecast of 267–251 μg/m³ triggers Punjab EPA Section 144 enforcement. Advance production 48 hours.</p>
+              <div class="ai-action">🕐 Complete critical deliveries by Day 4.</div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Policy Alert Timeline</div>
+          <table class="policy-table">
+            <thead><tr><th>Day</th><th>PM2.5</th><th>Expected Policy Action</th><th>Probability</th></tr></thead>
+            <tbody>
+              <tr><td>Today</td><td style="font-family:var(--mono)">9.0</td><td>Standard Baseline Monitoring</td><td><span style="color:var(--teal);font-weight:700">Active</span></td></tr>
+              <tr><td>Day 3</td><td style="font-family:var(--mono);color:var(--orange)">189</td><td>School closures, construction advisory</td><td><span style="color:var(--orange);font-weight:700">High</span></td></tr>
+              <tr style="background:var(--red-bg)"><td>Day 5</td><td style="font-family:var(--mono);color:var(--red)">267</td><td>Industrial curtailment, heavy vehicle ban</td><td><span style="color:var(--red);font-weight:700">Very High</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- BIZ TAB: NEWS FEED -->
+    <div class="sec-page" id="biz-news">
+      <div class="ph"><div class="ph-title">Business Intelligence Feed</div><div class="ph-sub">Curated news relevant to operations, regulatory environment, and market opportunities</div></div>
+      <div class="news-filters">
+        <button class="nf-btn active" onclick="filterNews('all',this,'biz')">All</button>
+        <button class="nf-btn" onclick="filterNews('policy',this,'biz')">Policy</button>
+        <button class="nf-btn" onclick="filterNews('market',this,'biz')">Market</button>
+      </div>
+      <div id="bizNewsFeed"></div>
+    </div>
+
+    <!-- BIZ TAB: TECH DATA -->
+    <div class="sec-page" id="biz-techdata">
+      <div class="ph"><div class="ph-title">Technical Air Quality &amp; Sensor Data</div><div class="ph-sub">Real-time edge readings, atmospheric variables, and correlation matrices</div></div>
+      <div class="kpi-row">
+        <div class="kpi kpi-orange"><div class="kpi-label">Surface Pressure</div><div class="kpi-value" id="tech-press">1012 hPa</div><div class="kpi-sub">Nominal Sea Level</div></div>
+        <div class="kpi kpi-amber"><div class="kpi-label">Temperature</div><div class="kpi-value" id="tech-temp">29.5°C</div><div class="kpi-sub">Coastal Ambient</div></div>
+        <div class="kpi kpi-sky"><div class="kpi-label">Humidity</div><div class="kpi-value" id="tech-hum">65%</div><div class="kpi-sub">Moderate Marine RH</div></div>
+        <div class="kpi kpi-teal"><div class="kpi-label">Wind Speed</div><div class="kpi-value" id="tech-wind">14 km/h</div><div class="kpi-sub">SW Dispersion Active</div></div>
+      </div>
+    </div>
+
+    <!-- BIZ TAB: ANALYTICS & MODELS -->
+    <div class="sec-page" id="biz-techanalytics">
+      <div class="ph"><div class="ph-title">Model Analytics &amp; Validation</div><div class="ph-sub">Machine learning regression metrics across CatBoost, LightGBM, and Random Forest</div></div>
+      <div class="card">
+        <table class="policy-table">
+          <thead><tr><th>Model</th><th>Test MAE</th><th>Test R²</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr style="background:var(--teal-bg)"><td><strong>CatBoost Regressor</strong></td><td style="font-family:var(--mono);color:var(--teal)">2.14 μg/m³</td><td style="font-family:var(--mono);color:var(--teal)">0.964</td><td><span class="badge-pill" style="background:var(--teal-bg);color:var(--teal)">★ PRODUCTION</span></td></tr>
+            <tr><td>LightGBM Regressor</td><td style="font-family:var(--mono)">2.38 μg/m³</td><td style="font-family:var(--mono)">0.951</td><td>Validation</td></tr>
+            <tr><td>Random Forest Ensemble</td><td style="font-family:var(--mono)">2.82 μg/m³</td><td style="font-family:var(--mono)">0.938</td><td>Baseline</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- BIZ TAB: API HUB -->
+    <div class="sec-page" id="biz-api">
+      <div class="ph"><div class="ph-title">API Hub &amp; Live Ingestion</div><div class="ph-sub">REST Endpoints and IoT edge telemetry pipelines</div></div>
+      <div class="card">
+        <div class="code-blk"><span class="kw">import</span> requests
+
+<span class="cmt"># Ingest latest hardware sensor packet</span>
+resp = requests.<span class="kw">get</span>(
+    <span class="str">"http://localhost:8000/api/v1/ingest/latest"</span>,
+    params={<span class="str">"limit"</span>: <span class="num">10</span>}
+)
+data = resp.json()
+<span class="kw">print</span>(<span class="str">f"Live PM2.5: {data[0]['pm2_5']} μg/m³"</span>)</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     GOVERNMENT APP SHELL
+═══════════════════════════════════════════════ -->
+<div class="app-shell" id="govApp">
+  <aside class="sidebar" id="govSidebar">
+    <div class="sb-head">
+      <div class="sb-logo">Air<span>Sense</span></div>
+      <div class="sb-profile gov">🏛️ Sovereign Government</div>
+      <div class="sb-hardware-badge">
+        <div class="live-dot-green"></div>
+        <span class="sb-hw-lbl">NODE STREAMING</span>
+        <span class="sb-hw-val" id="govHwVal">9.0 µg</span>
+      </div>
+    </div>
+    <div class="sb-section">City Monitoring</div>
+    <div class="nav-item active" onclick="govNav('cityoverview',this)"><div class="nav-icon">🏙️</div>City Dashboard</div>
+    <div class="nav-item" onclick="govNav('map',this)"><div class="nav-icon">🗺️</div>Map Intelligence</div>
+    <div class="sb-section">Policy &amp; Response</div>
+    <div class="nav-item" onclick="govNav('policy',this)"><div class="nav-icon">⚖️</div>Policy Command<div class="nav-badge nb-red">ACTION REQ</div></div>
+    <div class="nav-item" onclick="govNav('health',this)"><div class="nav-icon">🏥</div>Public Health Monitor</div>
+    <div class="nav-item" onclick="govNav('industry',this)"><div class="nav-icon">🏭</div>Industry Compliance</div>
+    <div class="sb-section">Intelligence</div>
+    <div class="nav-item" onclick="govNav('news',this)"><div class="nav-icon">📰</div>Intelligence Feed</div>
+    <div class="sb-sep"></div>
+    <div class="sb-section">Technical Data</div>
+    <div class="nav-item" onclick="govNav('govtech',this)"><div class="nav-icon">🔬</div>Technical Data</div>
+    <div class="nav-item" onclick="govNav('govapi',this)"><div class="nav-icon">⚡</div>API &amp; Integration</div>
+    <div class="sb-footer">
+      <button class="switch-profile-btn" onclick="switchProfile()">⇄ Switch Profile</button>
+      <div>AirSense · Sovereign EPA Hub</div>
+    </div>
+  </aside>
+
+  <div class="topbar">
+    <div class="tb-title" id="govTopTitle">City Dashboard</div>
+    <div class="aqi-badge" style="background:var(--teal-bg);color:var(--teal);border-color:var(--teal-bd)">COASTAL AIRSHED: 9.0 µg (SAFE)</div>
+    <div class="tb-time" id="govTime">—</div>
+    <button class="theme-btn" onclick="toggleTheme()" id="themeBtnGov">☀️</button>
+    <div class="live-dot"></div>
+  </div>
+
+  <main class="main">
+
+    <!-- GOV TAB: CITY DASHBOARD -->
+    <div class="sec-page active" id="gov-cityoverview">
+      <div class="ph"><div class="ph-title">National Urban Air Quality Dashboard</div><div class="ph-sub">Real-time monitoring across Karachi, Islamabad, Lahore, and monitored industrial zones</div></div>
+      
+      <div class="kpi-row">
+        <div class="kpi kpi-cyan"><div class="kpi-label">Karachi Coastal Node</div><div class="kpi-value" id="kpiGovKHI">9.0 μg/m³</div><div class="kpi-sub">Onsite BIC Rooftop Node</div><div class="kpi-delta delta-dn">✓ WHO Compliant</div></div>
+        <div class="kpi kpi-orange"><div class="kpi-label">Zones at High Risk</div><div class="kpi-value">3 / 10</div><div class="kpi-sub">Korangi, I-9, Lahore Center</div><div class="kpi-delta delta-up">2 approaching Emergency</div></div>
+        <div class="kpi kpi-amber"><div class="kpi-label">Population Exposed</div><div class="kpi-value">1.4M</div><div class="kpi-sub">Above statutory safe threshold</div><div class="kpi-delta delta-neu">Localized Smog Hotspots</div></div>
+        <div class="kpi kpi-teal"><div class="kpi-label">Policy Status</div><div class="kpi-value">STAGE 1: SAFE</div><div class="kpi-sub">No citizen movement limits required</div><div class="kpi-delta delta-dn">Active Surveillance</div></div>
+      </div>
+
+      <div class="g-main">
+        <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="card-title">10-Day City Forecast</div>
+            <div class="forecast-strip" id="govForecast"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">Priority Actions Required</div>
+            <div class="alert-item ai-critical"><div class="ai-dot red"></div><div class="ai-body"><div class="ai-tag tag-critical">IMMEDIATE — DAY 5</div><h4>Issue Emergency Smog Protocol for Punjab Corridor</h4><p>PM2.5 forecast of 267 μg/m³ on Day 5 will breach emergency thresholds in northern industrial belts.</p><div class="ai-action">📋 Draft Smog Emergency Notification for CM Office.</div></div></div>
+            <div class="alert-item ai-warning"><div class="ai-dot amber"></div><div class="ai-body"><div class="ai-tag tag-warning">INDUSTRIAL ZONES</div><h4>Enforce Korangi &amp; I-9 Scrubber Inspections</h4><p>Targeted curtailment reduces regional emission loads by an estimated 18–24 μg/m³.</p></div></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card"><div class="card-title">Zone Status Summary</div>
+            <div id="zoneStatusList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GOV TAB: MAP INTELLIGENCE -->
+    <div class="sec-page" id="gov-map">
+      <div class="ph"><div class="ph-title">National Map Intelligence &amp; Smog Corridors</div><div class="ph-sub">Real-time geospatial visualization with satellite layers and physical monitoring nodes</div></div>
+      <div class="map-controls">
+        <button class="map-ctrl-btn active" onclick="setMapLayer('satellite',this)">🛰️ Satellite</button>
+        <button class="map-ctrl-btn" onclick="setMapLayer('street',this)">🗺️ Street Map</button>
+        <div style="margin-left:auto;font-size:.75rem;color:var(--t3);font-family:var(--mono)">Last updated: <span id="mapUpdateTime">—</span></div>
+      </div>
+      <div id="mapContainer"></div>
+      <div class="map-legend">
+        <div class="ml-item"><div class="ml-dot" style="background:#00F0FF"></div>BIC Karachi Ground Truth Node</div>
+        <div class="ml-item"><div class="ml-dot" style="background:#22c55e"></div>Good (0–55 μg/m³)</div>
+        <div class="ml-item"><div class="ml-dot" style="background:#eab308"></div>Moderate (55–150)</div>
+        <div class="ml-item"><div class="ml-dot" style="background:#ef4444"></div>Industrial Hotspot (150+)</div>
+      </div>
+    </div>
+
+    <!-- GOV TAB: POLICY COMMAND -->
+    <div class="sec-page" id="gov-policy">
+      <div class="ph"><div class="ph-title">Policy Command Centre</div><div class="ph-sub">Recommended government actions based on current readings and 7-day forecast</div></div>
+      <div id="govPolicyActions"></div>
+    </div>
+
+    <!-- GOV TAB: PUBLIC HEALTH -->
+    <div class="sec-page" id="gov-health">
+      <div class="ph"><div class="ph-title">Public Health Intelligence</div><div class="ph-sub">Hospital surge predictions and population health burden modeling (BenMAP-CE)</div></div>
+      <div class="kpi-row">
+        <div class="kpi kpi-red"><div class="kpi-label">Predicted ER Surge</div><div class="kpi-value">+34%</div><div class="kpi-sub">Admissions above baseline — Day 5</div><div class="kpi-delta delta-up">Smog Episode Peak</div></div>
+        <div class="kpi kpi-orange"><div class="kpi-label">Vulnerable Exposed</div><div class="kpi-value">280K</div><div class="kpi-sub">Pediatric &amp; Geriatric Cohort</div><div class="kpi-delta delta-up">High Risk</div></div>
+        <div class="kpi kpi-teal"><div class="kpi-label">Avoided Health Costs</div><div class="kpi-value">PKR 880M</div><div class="kpi-sub">Via Advance Pre-Emptive Actions</div><div class="kpi-delta delta-dn">Economically Quantified</div></div>
+      </div>
+    </div>
+
+    <!-- GOV TAB: INDUSTRY COMPLIANCE -->
+    <div class="sec-page" id="gov-industry">
+      <div class="ph"><div class="ph-title">Industry Compliance Monitor</div><div class="ph-sub">Sector-wise emission monitoring and enforcement priorities</div></div>
+      <div class="card">
+        <table class="policy-table">
+          <thead><tr><th>Sector</th><th>Registered Firms</th><th>Compliant</th><th>Non-Compliant</th><th>Enforcement Priority</th></tr></thead>
+          <tbody>
+            <tr style="background:var(--red-bg)"><td>Manufacturing &amp; Industry</td><td style="font-family:var(--mono)">340</td><td style="color:var(--teal)">32%</td><td style="color:var(--red)">42%</td><td><span class="badge-pill" style="background:var(--red-bg);color:var(--red)">IMMEDIATE</span></td></tr>
+            <tr><td>Construction</td><td style="font-family:var(--mono)">180</td><td style="color:var(--teal)">44%</td><td style="color:var(--orange)">26%</td><td><span class="badge-pill" style="background:var(--orange-bg);color:var(--orange)">HIGH</span></td></tr>
+            <tr><td>Transport &amp; Logistics</td><td style="font-family:var(--mono)">8200</td><td style="color:var(--teal)">48%</td><td style="color:var(--orange)">31%</td><td><span class="badge-pill" style="background:var(--orange-bg);color:var(--orange)">HIGH</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- GOV TAB: NEWS -->
+    <div class="sec-page" id="gov-news">
+      <div class="ph"><div class="ph-title">Government Intelligence Feed</div><div class="ph-sub">Policy, regulatory, and environmental scientific updates</div></div>
+      <div id="govNewsFeed"></div>
+    </div>
+
+    <!-- GOV TAB: TECH DATA -->
+    <div class="sec-page" id="gov-govtech">
+      <div class="ph"><div class="ph-title">Technical Data &amp; Model Reference</div><div class="ph-sub">Full ML model details, dataset specifications, and validation metrics</div></div>
+      <div class="card">
+        <table class="policy-table">
+          <thead><tr><th>Model</th><th>Test MAE</th><th>Test R²</th><th>Status</th></tr></thead>
+          <tbody>
+            <tr style="background:var(--teal-bg)"><td><strong>CatBoost Regressor</strong></td><td style="font-family:var(--mono);color:var(--teal)">2.14 μg/m³</td><td style="font-family:var(--mono);color:var(--teal)">0.964</td><td><span class="badge-pill" style="background:var(--teal-bg);color:var(--teal)">★ Active</span></td></tr>
+            <tr><td>LightGBM Regressor</td><td style="font-family:var(--mono)">2.38 μg/m³</td><td style="font-family:var(--mono)">0.951</td><td>Validation</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- GOV TAB: API HUB -->
+    <div class="sec-page" id="gov-govapi">
+      <div class="ph"><div class="ph-title">API &amp; Government Integration Hub</div><div class="ph-sub">Connect AirSense data to municipal emergency platforms and EPA portals</div></div>
+      <div class="card">
+        <div class="code-blk"><span class="kw">import</span> requests
+
+<span class="cmt"># Auto-activate emergency when PM2.5 > 250</span>
+status = requests.<span class="kw">get</span>(
+    <span class="str">"http://localhost:8000/api/v1/ingest/latest"</span>
+).json()</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// DATA & STATE
+// ═══════════════════════════════════════════════
+let livePM25 = 9.0;
+let liveSeq = 23;
+
+const FORECAST = [
+  { day:'Today', pm25:9.0, icon:'🌊', today:true },
+  { day:'Tue',   pm25:12.4, icon:'🌤️' },
+  { day:'Wed',   pm25:18.9, icon:'🌫️' },
+  { day:'Thu',   pm25:23.4, icon:'⚠️', warning:true },
+  { day:'Fri',   pm25:26.7, icon:'🚨', critical:true },
+  { day:'Sat',   pm25:25.1, icon:'🚨', critical:true },
+  { day:'Sun',   pm25:19.8, icon:'🌫️' },
+  { day:'Mon',   pm25:15.6, icon:'🌫️' },
+  { day:'Tue',   pm25:13.4, icon:'🌤️' },
+  { day:'Wed',   pm25:11.9, icon:'🌊' },
+];
+
+function aqiLabel(v){ 
+  if(v<=15)return{l:'Safe',c:'#00F0FF',bg:'rgba(0,240,255,0.1)'}; 
+  if(v<=35)return{l:'Moderate',c:'#10B981',bg:'rgba(16,185,129,0.1)'}; 
+  if(v<=55)return{l:'Sensitive',c:'#eab308',bg:'rgba(234,179,8,0.1)'}; 
+  if(v<=150)return{l:'Unhealthy',c:'#f97316',bg:'rgba(249,115,22,0.1)'}; 
+  return{l:'Hazardous',c:'#ef4444',bg:'rgba(239,68,68,0.15)'}; 
+}
+
+const ZONES = [
+  { name:'BIC Karachi Rooftop Node (Ground Truth)', lat:24.8607, lng:67.0011, pm25:9.0, type:'Active Physical Node' },
+  { name:'Karachi Port & Korangi Industrial', lat:24.8300, lng:67.1200, pm25:42.5, type:'Industrial Corridor' },
+  { name:'BIC Islamabad Academic Block', lat:33.6844, lng:73.0479, pm25:18.2, type:'Academic Station' },
+  { name:'Islamabad I-9 & Margalla Basin', lat:33.6500, lng:73.0600, pm25:38.0, type:'Smog Inversion Zone' },
+  { name:'Lahore Smog Center (Gulberg)', lat:31.5204, lng:74.3587, pm25:57.4, type:'Regional Smog Center' },
+  { name:'Kala Shah Kaku Brick Kiln Cluster', lat:31.7200, lng:74.2700, pm25:88.0, type:'Point Emission Cluster' }
+];
+
+const SECTOR_DATA = {
+  logistics: {
+    name:'Transport & Logistics', icon:'🚛', color:'#D94E1A',
+    kpis:[{label:'Disruption Days/Year',val:'28 days',delta:'+3 vs last yr',up:true},{label:'Annual Disruption Loss',val:'PKR 13.6M',delta:'18.1% of revenue',up:true},{label:'Compliance Rate',val:'68.6%',delta:'Fine risk active',up:true},{label:'Potential Saving',val:'PKR 4.2M/yr',delta:'With AirSense',up:false}],
+    alerts:[
+      {type:'critical',tag:'CRITICAL — DAY 5',title:'Section 144 Vehicle Restriction Expected in Smog Corridors',text:'PM2.5 surge in industrial belts triggers heavy vehicle restrictions. Front-load long haul routes.',action:'🕐 Reschedule pending deliveries to Day 1–4.',saving:'PKR 400K saved'},
+      {type:'info',tag:'ADVISORY — TODAY',title:'Optimal Low-AQI Coastal Transit Active',text:'Karachi coastal transit corridor currently enjoys clean marine air mass (9.0 µg/m³). Dispatch freely.',action:'🗺️ Take advantage of clean marine dispersion window today.',saving:'PKR 85K saved'}
+    ]
+  },
+  manufacturing: {
+    name:'Manufacturing & Industry', icon:'🏭', color:'#0B7A65',
+    kpis:[{label:'Compliance Rate',val:'68% at risk',delta:'Fine avg PKR 3.3M',up:true},{label:'Disruption Days/Year',val:'13.8 days',delta:'Operational curtailment',up:true},{label:'Annual Compliance Cost',val:'PKR 9.5M',delta:'11.9% of revenue',up:true},{label:'Potential Saving',val:'PKR 3.2M/yr',delta:'With AirSense',up:false}],
+    alerts:[
+      {type:'critical',tag:'CRITICAL — EPA INSPECTION',title:'Industrial Curtailment Order Expected Day 5–6',text:'Heavy smog episodes in northern hubs trigger EPA Section 144 shutdowns. Advance production.',action:'⚙️ Advance production schedule 48 hours.',saving:'PKR 540K saved'}
+    ]
+  },
+  construction: {
+    name:'Construction & Real Estate', icon:'🏗️', color:'#B07800',
+    kpis:[{label:'Avg Disruption Days',val:'32.7 days',delta:'Highest of all sectors',up:true},{label:'Annual Additional Cost',val:'PKR 14.8M',delta:'19.1% of revenue',up:true},{label:'Penalty Clause Exposure',val:'HIGH',delta:'Client contracts at risk',up:true},{label:'Potential Saving',val:'PKR 4.6M/yr',delta:'With AirSense',up:false}],
+    alerts:[
+      {type:'critical',tag:'CRITICAL — DUST CONTROLS',title:'Water Misting & Dust Suppression Protocol',text:'Mandatory dust suppression on unpaved site perimeters.',action:'💧 Activate water misting systems immediately.',saving:'PKR 620K saved'}
+    ]
+  },
+  healthcare: {
+    name:'Healthcare & Pharma', icon:'🏥', color:'#1565C0',
+    kpis:[{label:'Predicted Surge',val:'+34%',delta:'ER admissions — Day 5',up:true},{label:'Compliance Rate',val:'100%',delta:'WHO Compliant',up:false},{label:'Additional Annual Cost',val:'PKR 5.4M',delta:'8.2% of revenue',up:true},{label:'Potential Saving',val:'PKR 1.6M/yr',delta:'With AirSense',up:false}],
+    alerts:[
+      {type:'info',tag:'ADVISORY — CLINICAL IAQ',title:'Maintain Positive Pressure HEPA Recirculation',text:'Clinical rooms operating on verified indoor filtration.',action:'🔄 Set HVAC to positive pressure mode.',saving:'Full Patient Safety'}
+    ]
+  },
+  education: {
+    name:'Education (Private)', icon:'🎓', color:'#6B21A8',
+    kpis:[{label:'Disruption Days/Year',val:'19.2 days',delta:'Closure risk',up:true},{label:'Annual Additional Cost',val:'PKR 10.5M',delta:'10.4% of revenue',up:true},{label:'Campus Safety',val:'100% SAFE',delta:'Outdoor Approved',up:false},{label:'Potential Saving',val:'PKR 3.2M/yr',delta:'With AirSense',up:false}],
+    alerts:[
+      {type:'info',tag:'CAMPUS ADVISORY',title:'All Outdoor Sports & Gatherings 100% Approved',text:'Current PM2.5 is 9.0 µg/m³. Outdoor activities, student events, and rooftop gatherings are 100% safe.',action:'🎓 Conduct normal academic schedule.',saving:'Goodwill Preserved'}
+    ]
+  },
+  retail: {
+    name:'Retail & FMCG', icon:'🛒', color:'#0B7A65',
+    kpis:[{label:'Foot Traffic',val:'NORMAL',delta:'Clean air baseline',up:false},{label:'Potential Saving',val:'PKR 1.6M/yr',delta:'With AirSense',up:false}],
+    alerts:[
+      {type:'info',tag:'RETAIL ADVISORY',title:'Footfall Operating at Peak Weekend Baseline',text:'No smog disruption in coastal areas.',action:'📱 Continue standard retail promotions.',saving:'PKR 145K revenue'}
+    ]
+  }
+};
+
+const BIZ_NEWS = [
+  {tag:'policy',tagLabel:'Policy',tagStyle:'background:var(--sky-bg);color:var(--sky);border:1px solid var(--sky-bd)',title:'Pakistan EPA Issues Revised NEQS 2025 Standards',body:'National Environmental Quality Standards revised with stricter PM2.5 tracking across industrial corridors.',src:'Pakistan EPA',time:'2h ago'},
+  {tag:'market',tagLabel:'Market',tagStyle:'background:var(--teal-bg);color:var(--teal);border:1px solid var(--teal-bd)',title:'World Bank Approves Clean Air Technology Grants',body:'Multi-city funding approved for AI-driven air quality monitoring platforms in Pakistan.',src:'World Bank',time:'6h ago'}
+];
+
+const GOV_NEWS = [
+  {tag:'policy',tagLabel:'Policy',tagStyle:'background:var(--sky-bg);color:var(--sky);border:1px solid var(--sky-bd)',title:'WHO 2021 Air Quality Framework Compliance Directive',body:'National reporting aligns urban monitoring networks with WHO ambient guidelines.',src:'WHO',time:'1d ago'}
+];
+
+// ═══════════════════════════════════════════════
+// CANVAS CHARTS
+// ═══════════════════════════════════════════════
+function lineChart(id, labels, datasets, opts={}) {
+  const c = document.getElementById(id); if(!c || c.parentElement.clientHeight === 0) return;
+  const ctx = c.getContext('2d'); const dpr = window.devicePixelRatio||1;
+  const W = c.parentElement.clientWidth||500, H = c.parentElement.clientHeight||160;
+  c.width=W*dpr; c.height=H*dpr; c.style.width=W+'px'; c.style.height=H+'px'; ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  const pad={t:12,r:16,b:32,l:46}; const pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
+  const allV=datasets.flatMap(d=>d.data.filter(v=>v!=null));
+  const mn=opts.minY!=null?opts.minY:Math.max(0,Math.min(...allV)-10), mx=opts.maxY!=null?opts.maxY:Math.max(...allV)+20;
+  function xp(i){return pad.l+(i/(labels.length-1))*pw;}
+  function yp(v){return pad.t+ph-((v-mn)/(mx-mn))*ph;}
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  ctx.strokeStyle = isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.05)'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+(i/4)*ph; ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(pad.l+pw,y); ctx.stroke();
+    ctx.fillStyle = isDark?'#7A7268':'#9B9488'; ctx.font=`9px 'JetBrains Mono'`; ctx.textAlign='right';
+    ctx.fillText(Math.round(mx-(i/4)*(mx-mn)),pad.l-5,y+3);
+  }
+  ctx.fillStyle = isDark?'#7A7268':'#9B9488'; ctx.font=`9px 'Manrope'`; ctx.textAlign='center';
+  labels.forEach((l,i)=>{if(i%2===0)ctx.fillText(l,xp(i),H-6);});
+  datasets.forEach(ds=>{
+    if(ds.fill){
+      ctx.beginPath(); ds.data.forEach((v,i)=>{if(v==null)return;i===0?ctx.moveTo(xp(i),yp(v)):ctx.lineTo(xp(i),yp(v));});
+      ctx.lineTo(xp(ds.data.length-1),yp(mn)); ctx.lineTo(pad.l,yp(mn)); ctx.closePath();
+      const g=ctx.createLinearGradient(0,pad.t,0,pad.t+ph); g.addColorStop(0,ds.fillColor||'rgba(217,78,26,0.2)'); g.addColorStop(1,'rgba(217,78,26,0)');
+      ctx.fillStyle=g; ctx.fill();
+    }
+    if(ds.dashed)ctx.setLineDash([4,4]);else ctx.setLineDash([]);
+    ctx.beginPath(); ctx.strokeStyle=ds.color; ctx.lineWidth=ds.w||2;
+    let first=true; ds.data.forEach((v,i)=>{if(v==null)return;if(first){ctx.moveTo(xp(i),yp(v));first=false;}else ctx.lineTo(xp(i),yp(v));});
+    ctx.stroke(); ctx.setLineDash([]);
+  });
+}
+
+function barChart(id, labels, values, colors, opts={}) {
+  const c=document.getElementById(id); if(!c || c.parentElement.clientHeight === 0) return;
+  const ctx=c.getContext('2d'); const dpr=window.devicePixelRatio||1;
+  const W=c.parentElement.clientWidth||400, H=c.parentElement.clientHeight||200;
+  c.width=W*dpr; c.height=H*dpr; c.style.width=W+'px'; c.style.height=H+'px'; ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  const pad={t:14,r:14,b:opts.rotLabels?52:36,l:50}, pw=W-pad.l-pad.r, ph=H-pad.t-pad.b;
+  const maxV=Math.max(...values)*1.15;
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  ctx.strokeStyle=isDark?'rgba(255,255,255,0.05)':'rgba(0,0,0,0.04)'; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){const y=pad.t+(i/4)*ph;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+pw,y);ctx.stroke();}
+  const bw=(pw/labels.length)*0.6;
+  labels.forEach((l,i)=>{
+    const x=pad.l+(i+0.5)*(pw/labels.length);
+    const bh=(values[i]/maxV)*ph, by=pad.t+ph-bh;
+    const col=Array.isArray(colors)?colors[i%colors.length]:colors;
+    ctx.fillStyle=col;
+    ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x-bw/2,by,bw,bh,[3,3,0,0]);else ctx.rect(x-bw/2,by,bw,bh);
+    ctx.fill();
+    ctx.fillStyle=isDark?'#7A7268':'#9B9488'; ctx.font=`9px 'Manrope'`; ctx.textAlign='center';
+    if(opts.rotLabels){ctx.save();ctx.translate(x,H-8);ctx.rotate(-Math.PI/4);ctx.fillText(l,0,0);ctx.restore();}
+    else ctx.fillText(l,x,H-6);
+    ctx.fillStyle=isDark?'#EDE8E0':'#1A1714'; ctx.font=`bold 9px 'JetBrains Mono'`; ctx.textAlign='center';
+    ctx.fillText(opts.fmtV?opts.fmtV(values[i]):values[i],x,by-4);
+  });
+}
+
+function drawGauge(id, val) {
+  const c=document.getElementById(id); if(!c) return;
+  const ctx=c.getContext('2d'); const dpr=window.devicePixelRatio||1;
+  c.width=200*dpr; c.height=120*dpr; c.style.width='200px'; c.style.height='120px'; ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,200,120);
+  const cx=100,cy=110,r=80,sw=12,maxV=100;
+  const zones=[{end:15,c:'#00F0FF'},{end:35,c:'#10B981'},{end:55,c:'#eab308'},{end:100,c:'#ef4444'}];
+  let prev=0;
+  zones.forEach(z=>{
+    const a1=Math.PI+(prev/maxV)*Math.PI, a2=Math.PI+(Math.min(z.end,maxV)/maxV)*Math.PI;
+    ctx.beginPath(); ctx.arc(cx,cy,r,a1,a2); ctx.strokeStyle=z.c+'44'; ctx.lineWidth=sw; ctx.stroke();
+    prev=z.end;
+  });
+  ctx.beginPath(); ctx.arc(cx,cy,r,Math.PI,Math.PI+(Math.min(val,maxV)/maxV)*Math.PI);
+  ctx.strokeStyle='#00F0FF'; ctx.lineWidth=sw; ctx.lineCap='round'; ctx.stroke();
+}
+
+// ═══════════════════════════════════════════════
+// FORECAST STRIP & DOM BUILDERS
+// ═══════════════════════════════════════════════
+function buildForecastStrip(containerId, days=10) {
+  const el=document.getElementById(containerId); if(!el) return;
+  el.innerHTML=FORECAST.slice(0,days).map(d=>{
+    const cat=aqiLabel(d.pm25);
+    let cls='fc-day'; if(d.today)cls+=' today'; else if(d.critical)cls+=' critical'; else if(d.warning)cls+=' warning';
+    return `<div class="${cls}">
+      <div class="fc-day-label">${d.today?'TODAY':d.day}</div>
+      <div class="fc-icon">${d.icon}</div>
+      <div class="fc-pm25">${d.pm25.toFixed(1)}</div>
+      <div class="fc-category" style="background:${cat.bg};color:${cat.c}">${cat.l}</div>
+      <div class="fc-policy">POLICY RISK</div>
+    </div>`;
+  }).join('');
+}
+
+function sectorTab(sector, btn) {
+  document.querySelectorAll('.st-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  updateSectorIntelligence(sector);
+}
+
+function updateSectorIntelligence(sector) {
+  const el=document.getElementById('sectorContent'); if(!el) return;
+  const sd=SECTOR_DATA[sector];
+  if(!sd) return;
+  let html=`<div class="kpi-row">`;
+  sd.kpis.forEach(k=>{
+    html+=`<div class="kpi kpi-orange"><div class="kpi-label">${k.label}</div><div class="kpi-value" style="font-size:1.3rem">${k.val}</div><div class="kpi-delta delta-dn">${k.delta}</div></div>`;
+  });
+  html+=`</div><div class="g-main"><div><div class="card"><div class="card-title">Operational Intelligence &amp; Recommended Actions</div>`;
+  sd.alerts.forEach(a=>{
+    html+=`<div class="alert-item ai-info">
+      <div class="ai-dot teal"></div>
+      <div class="ai-body">
+        <div class="ai-tag tag-info">${a.tag}</div>
+        <h4>${a.title}</h4>
+        <p>${a.text}</p>
+        <div class="ai-action">${a.action}</div>
+      </div>
+      ${a.saving?`<div class="ai-saving">${a.saving}</div>`:''}
+    </div>`;
+  });
+  html+=`</div></div><div><div class="card"><div class="card-title">10-Day Sector Risk Outlook</div><div class="forecast-strip" id="sectorForecast"></div></div></div></div>`;
+  el.innerHTML=html;
+  setTimeout(()=>buildForecastStrip('sectorForecast',10),50);
+}
+
+function calculateROI() {
+  const rev=parseInt(document.getElementById('calc-rev').value)||2500000;
+  const plan=parseInt(document.getElementById('calc-plan').value)||480000;
+  const totalSaving=Math.round(rev*12*0.085);
+  const roi=Math.round(totalSaving/plan);
+  document.getElementById('rAnnSaving').textContent='PKR '+fmtNum(totalSaving);
+  document.getElementById('rROI').textContent=roi+'×';
+  document.getElementById('rBreakEven').textContent='28 days';
+  document.getElementById('rDisruptSave').textContent='PKR '+fmtNum(Math.round(totalSaving*0.6));
+  document.getElementById('rComplianceSave').textContent='PKR '+fmtNum(Math.round(totalSaving*0.25));
+  document.getElementById('rProdSave').textContent='PKR '+fmtNum(Math.round(totalSaving*0.15));
+  document.getElementById('calcResults').style.display='block';
+}
+function fmtNum(n){if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(0)+'K';return n.toString();}
+
+function buildNews(containerId, newsArr, filter='all') {
+  const el=document.getElementById(containerId); if(!el) return;
+  const filtered=filter==='all'?newsArr:newsArr.filter(n=>n.tag===filter);
+  el.innerHTML=filtered.map(n=>`<div class="alert-item ai-info" style="margin-bottom:8px">
+    <div class="ai-dot teal"></div>
+    <div class="ai-body"><h4>${n.title}</h4><p>${n.body}</p>
+    <div style="font-size:.65rem;color:var(--t4);margin-top:4px">${n.src} · ${n.time}</div></div>
+  </div>`).join('');
+}
+
+function buildZoneList() {
+  const el=document.getElementById('zoneStatusList'); if(!el) return;
+  el.innerHTML=ZONES.map(z=>{
+    const cat=aqiLabel(z.pm25);
+    return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--bg2)">
+      <div style="width:9px;height:9px;border-radius:50%;background:${cat.c};flex-shrink:0"></div>
+      <div style="flex:1;font-size:.78rem;color:var(--t1);font-weight:500">${z.name}</div>
+      <div style="font-family:var(--mono);font-size:.75rem;font-weight:700;color:${cat.c};width:55px;text-align:right">${z.pm25.toFixed(1)}</div>
+      <div style="font-size:.65rem;color:${cat.c};font-family:var(--mono);width:70px;text-align:right">${cat.l}</div>
+    </div>`;
+  }).join('');
+}
+
+function buildGovPolicy() {
+  const el=document.getElementById('govPolicyActions'); if(!el) return;
+  el.innerHTML=`
+    <div class="card" style="border-left:4px solid var(--teal); margin-bottom:12px;">
+      <div class="ai-tag tag-info">STAGE 1: NORMAL</div>
+      <h4 style="font-size:.88rem;color:var(--t1);font-weight:700;margin:6px 0;">Coastal Marine Airshed Within WHO Limits</h4>
+      <p style="font-size:.79rem;color:var(--t2);">Karachi monitoring node reads 9.0 µg/m³. Continue routine surveillance.</p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--amber); margin-bottom:12px;">
+      <div class="ai-tag tag-warning">STAGE 2: CONTINGENCY</div>
+      <h4 style="font-size:.88rem;color:var(--t1);font-weight:700;margin:6px 0;">Industrial Hotspot Scrubber Inspections</h4>
+      <p style="font-size:.79rem;color:var(--t2);">Enforce pre-emptive scrubber compliance in Korangi and I-9 corridors.</p>
+    </div>`;
+}
+
+function buildOverviewAlerts() {
+  const el=document.getElementById('overviewAlerts'); if(!el) return;
+  el.innerHTML=`
+    <div class="alert-item ai-info"><div class="ai-dot teal"></div><div class="ai-body"><h4>Coastal Marine Ingress Clean (PM2.5: 9.0 µg/m³)</h4><p>100% fresh economizer active. Air quality optimal for campus operations.</p></div></div>
+    <div class="alert-item ai-warning"><div class="ai-dot amber"></div><div class="ai-body"><h4>Nighttime Thermal Inversion Advisory</h4><p>Atmospheric boundary layer contraction projected between 22:00 and 06:00 PKT.</p></div></div>`;
+}
+
+function buildForecastAlerts() {
+  const el=document.getElementById('forecastAlerts'); if(!el) return;
+  el.innerHTML=`
+    <div class="alert-item ai-warning"><div class="ai-dot amber"></div><div class="ai-body"><h4>Ensemble Forecast Walk-Forward Projection</h4><p>CatBoost and Bayesian multi-model confidence ribbons predict steady baseline below 15 µg/m³ for coastal corridor.</p></div></div>`;
+}
+
+// ═══════════════════════════════════════════════
+// LEAFLET MAP
+// ═══════════════════════════════════════════════
+let map, satelliteLayer, streetLayer;
+function initMap() {
+  if(map){ map.invalidateSize(); return; }
+  map = L.map('mapContainer', {center:[28.5, 70.0], zoom:5, zoomControl:true});
+  satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'Esri WorldImagery',maxZoom:19});
+  streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap contributors',maxZoom:19});
+  satelliteLayer.addTo(map);
+  
+  ZONES.forEach(z=>{
+    const cat=aqiLabel(z.pm25);
+    L.circle([z.lat,z.lng],{radius:z.type.includes('Node')?22000:15000,color:cat.c,fillColor:cat.c,fillOpacity:0.4,weight:2}).addTo(map)
+      .bindPopup(`<div style="font-family:'Manrope',sans-serif;color:#1A1714;padding:4px;">
+        <strong>${z.name}</strong><br/>
+        <span style="font-size:11px;color:#666">${z.type}</span><br/>
+        <div style="font-size:15px;font-weight:700;color:${cat.c};margin-top:4px;">PM2.5: ${z.pm25.toFixed(1)} µg/m³</div>
+        <div style="font-size:11px;font-weight:600;">Status: ${cat.l}</div>
+      </div>`);
+    L.circleMarker([z.lat,z.lng],{radius:z.type.includes('Node')?7:5,color:'#fff',fillColor:cat.c,fillOpacity:1,weight:2}).addTo(map);
+  });
+  document.getElementById('mapUpdateTime').textContent=new Date().toLocaleTimeString();
+}
+
+function setMapLayer(type, btn) {
+  document.querySelectorAll('.map-ctrl-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  if(!map) return;
+  if(type==='satellite'){map.removeLayer(streetLayer);satelliteLayer.addTo(map);}
+  else{map.removeLayer(satelliteLayer);streetLayer.addTo(map);}
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION & REDRAW
+// ═══════════════════════════════════════════════
+function bizNav(id, el) {
+  document.querySelectorAll('#bizApp .nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('#bizApp .sec-page').forEach(s=>s.classList.remove('active'));
+  const sec=document.getElementById('biz-'+id); if(sec)sec.classList.add('active');
+  document.getElementById('bizTopTitle').textContent=el.textContent.trim();
+  const hasSectorSel=['sector','overview','forecast','financial'].includes(id);
+  document.getElementById('sectorSel').style.display=hasSectorSel?'block':'none';
+  setTimeout(redrawCharts, 80);
+  if(id==='sector') updateSectorIntelligence('logistics');
+}
+
+function govNav(id, el) {
+  document.querySelectorAll('#govApp .nav-item').forEach(n=>n.classList.remove('active'));
+  el.classList.add('active');
+  document.querySelectorAll('#govApp .sec-page').forEach(s=>s.classList.remove('active'));
+  const sec=document.getElementById('gov-'+id); if(sec)sec.classList.add('active');
+  document.getElementById('govTopTitle').textContent=el.textContent.trim();
+  setTimeout(()=>{
+    redrawCharts();
+    if(id==='map') initMap();
+    if(id==='policy') buildGovPolicy();
+  }, 80);
+}
+
+function redrawCharts() {
+  const fLabels=FORECAST.map(d=>d.today?'Today':d.day);
+  const fData=FORECAST.map(d=>d.pm25);
+  lineChart('forecastChart', fLabels, [{data:fData,color:'#00F0FF',fill:true,fillColor:'rgba(0,240,255,0.15)',w:2.5}],{minY:0,maxY:40});
+  drawGauge('gaugeCanvasBiz', livePM25);
+  barChart('costBenchChart',['Logistics','Construct.','Manufact.','Education','Healthcare','Retail'],[13.57,14.78,9.47,10.52,5.40,5.51],['#D94E1A','#B07800','#0B7A65','#6B21A8','#1565C0','#0B7A65'],{rotLabels:true,fmtV:v=>v.toFixed(1)+'M'});
+}
+
+function toggleTheme() {
+  const t=document.documentElement.getAttribute('data-theme')==='light'?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  const icon=t==='dark'?'☀️':'🌙';
+  ['themeBtn','themeBtnGov'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=icon;});
+  setTimeout(redrawCharts,50);
+}
+
+function updateClocks() {
+  const now=new Date();
+  const ts=now.toLocaleString('en-PK',{timeZone:'Asia/Karachi',dateStyle:'short',timeStyle:'short'});
+  ['bizTime','govTime'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=ts;});
+  const dateStr=now.toLocaleDateString('en-PK',{timeZone:'Asia/Karachi',weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  const el=document.getElementById('overviewDate');if(el)el.textContent=dateStr;
+}
+
+function launchApp(profile) {
+  document.getElementById('profileSel').classList.remove('show');
+  if(profile==='business'){
+    document.getElementById('bizApp').classList.add('active');
+    setTimeout(()=>{
+      buildForecastStrip('ovForecast',10);
+      buildForecastStrip('forecastStrip',10);
+      buildOverviewAlerts();
+      buildForecastAlerts();
+      updateSectorIntelligence('logistics');
+      buildNews('bizNewsFeed', BIZ_NEWS);
+      redrawCharts();
+    },100);
+  } else {
+    document.getElementById('govApp').classList.add('active');
+    setTimeout(()=>{
+      buildForecastStrip('govForecast',10);
+      buildZoneList();
+      buildGovPolicy();
+      buildNews('govNewsFeed', GOV_NEWS);
+      redrawCharts();
+    },100);
+  }
+}
+
+function switchProfile() {
+  document.getElementById('bizApp').classList.remove('active');
+  document.getElementById('govApp').classList.remove('active');
+  document.getElementById('profileSel').classList.add('show');
+}
+
+// ═══════════════════════════════════════════════
+// REAL-TIME CLOUD MQTT & HARDWARE SENSOR STREAMING
+// ═══════════════════════════════════════════════
+const BROKER_HOST = "562b34e92dc74f71895ba99ac87c8667.s1.eu.hivemq.cloud";
+const BROKER_PORT = 8884;
+const BROKER_PATH = "/mqtt";
+const BROKER_USER = "airsense_node_01";
+const BROKER_PASS = "AirSense2026!";
+const BROKER_TOPIC = "airsense/#";
+
+function initEnterpriseMQTT() {
+  if (typeof Paho === 'undefined' || !Paho.MQTT) {
+    console.warn("Paho MQTT not loaded for enterprise dashboard");
+    return;
+  }
+  const clientId = "airsense-ent-" + Math.floor(Math.random() * 100000);
+  const client = new Paho.MQTT.Client(BROKER_HOST, BROKER_PORT, BROKER_PATH, clientId);
+
+  client.onConnectionLost = (responseObject) => {
+    console.log("Enterprise MQTT Connection lost, reconnecting in 5s...", responseObject.errorMessage);
+    setTimeout(initEnterpriseMQTT, 5000);
+  };
+
+  client.onMessageArrived = (message) => {
+    try {
+      const data = JSON.parse(message.payloadString);
+      console.log("Enterprise LIVE MQTT PACKET RECEIVED:", data);
+      
+      const newPM25 = data.pm2_5 !== undefined ? Number(data.pm2_5) : (data.pm25 !== undefined ? Number(data.pm25) : null);
+      if (newPM25 !== null) {
+        livePM25 = newPM25;
+        liveSeq = data.sequence_number || (liveSeq + 1);
+
+        // Update Topbar & KPI elements
+        const bizHw = document.getElementById('bizHwVal');
+        const govHw = document.getElementById('govHwVal');
+        const kpiBiz = document.getElementById('kpiPM25Biz');
+        const kpiGov = document.getElementById('kpiGovKHI');
+        const gaugeV = document.getElementById('bizGaugeVal');
+
+        if(bizHw) bizHw.innerText = livePM25.toFixed(1) + ' µg (MQTT)';
+        if(govHw) govHw.innerText = livePM25.toFixed(1) + ' µg (MQTT)';
+        if(kpiBiz) kpiBiz.innerText = livePM25.toFixed(1) + ' µg/m³';
+        if(kpiGov) kpiGov.innerText = livePM25.toFixed(1) + ' µg/m³';
+        if(gaugeV) gaugeV.innerText = livePM25.toFixed(1);
+
+        drawGauge('gaugeCanvasBiz', livePM25);
+      }
+    } catch (e) {
+      console.error("Enterprise MQTT JSON Parse Error:", e);
+    }
+  };
+
+  client.connect({
+    useSSL: true,
+    userName: BROKER_USER,
+    password: BROKER_PASS,
+    timeout: 10,
+    onSuccess: () => {
+      console.log("Enterprise Dashboard connected to AirSense Cloud MQTT over TLS WebSockets (WSS 8884)!");
+      client.subscribe(BROKER_TOPIC, { qos: 0 });
+    },
+    onFailure: (err) => {
+      console.error("Enterprise MQTT Connection failed:", err ? err.errorMessage : "Unknown error");
+      setTimeout(initEnterpriseMQTT, 5000);
+    }
+  });
+}
+
+// Polling fallback to station backend port 8000
+async function pollLiveTelemetry() {
+  try {
+    const res = await fetch('http://localhost:8000/api/v1/ingest/latest?limit=5');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.length > 0) {
+        const latest = data[0];
+        if (latest.pm2_5 !== null) {
+          livePM25 = Number(latest.pm2_5);
+          liveSeq = latest.sequence_number || liveSeq;
+
+          // Update Topbar & KPI elements
+          const bizHw = document.getElementById('bizHwVal');
+          const govHw = document.getElementById('govHwVal');
+          const kpiBiz = document.getElementById('kpiPM25Biz');
+          const kpiGov = document.getElementById('kpiGovKHI');
+          const gaugeV = document.getElementById('bizGaugeVal');
+
+          if(bizHw) bizHw.innerText = livePM25.toFixed(1) + ' µg';
+          if(govHw) govHw.innerText = livePM25.toFixed(1) + ' µg';
+          if(kpiBiz) kpiBiz.innerText = livePM25.toFixed(1) + ' µg/m³';
+          if(kpiGov) kpiGov.innerText = livePM25.toFixed(1) + ' µg/m³';
+          if(gaugeV) gaugeV.innerText = livePM25.toFixed(1);
+
+          drawGauge('gaugeCanvasBiz', livePM25);
+        }
+      }
+    }
+  } catch(e) {
+    // Polling fallback silent
+  }
+}
+
+setInterval(pollLiveTelemetry, 3000);
+pollLiveTelemetry();
+initEnterpriseMQTT();
+
+// ═══════════════════════════════════════════════
+// BOOT SEQUENCE
+// ═══════════════════════════════════════════════
+window.addEventListener('load', ()=>{
+  updateClocks(); setInterval(updateClocks, 30000);
+  const bar=document.getElementById('ldBar');
+  let pct=0;
+  const iv=setInterval(()=>{
+    pct += 5; if(pct>100)pct=100;
+    bar.style.width=pct+'%';
+    if(pct>=100){
+      clearInterval(iv);
+      setTimeout(()=>{
+        document.getElementById('loading').classList.add('out');
+        setTimeout(()=>{
+          document.getElementById('loading').style.display='none';
+          document.getElementById('profileSel').classList.add('show');
+        }, 500);
+      }, 300);
+    }
+  }, 40);
+});
+window.addEventListener('resize',()=>setTimeout(redrawCharts,100));
+</script>
+</body>
+</html>

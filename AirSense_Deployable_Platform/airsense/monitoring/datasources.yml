@@ -1,0 +1,16 @@
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+  - name: TimescaleDB
+    type: postgres
+    url: timescaledb:5432
+    database: airsense
+    user: airsense
+    secureJsonData:
+      password: airsense123
+    jsonData:
+      sslmode: disable
+      timescaledb: true
