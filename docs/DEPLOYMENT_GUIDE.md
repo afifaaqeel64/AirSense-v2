@@ -67,7 +67,34 @@ Mode B provides robust campus-level execution using Docker Compose.
 
 ---
 
-## 3. Rollback Procedure
+## 3. Mode C: Cloud Managed PostgreSQL (Supabase) & Vercel / Render
+
+Mode C connects AirSense to a 24/7 managed cloud PostgreSQL instance (e.g., Supabase) with zero server maintenance.
+
+### 1. Database URL Configuration
+In your `.env` (or cloud dashboard environment variables):
+```bash
+# Supabase PostgreSQL Connection String
+DATABASE_URL=postgresql://postgres:7EZgyMcqYi%269qUE@db.vppczkvawiaptiygrqhx.supabase.co:5432/postgres
+```
+*Note: Characters like `&` in passwords must be URL-encoded as `%26`. The backend automatically converts `postgresql://` to `postgresql+asyncpg://` and detects IPv4/IPv6 reachability to route through the regional connection pooler (`aws-0-ap-northeast-2.pooler.supabase.com:5432`) when running on IPv4-only networks or serverless platforms.*
+
+### 2. Schema Initialization & Seeding
+To initialize all 17 public schema tables and seed the pilot stations (`BIC-KHI-ROOF-01`, `AIRSENSE-NODE-KHI-01`):
+```bash
+py scripts/init_and_seed_supabase.py
+```
+
+### 3. Vercel Serverless Deployment
+Add the `DATABASE_URL` in your Vercel Project Dashboard:
+1. Navigate to **Project Settings > Environment Variables**.
+2. Add Key: `DATABASE_URL`, Value: `postgresql://postgres:7EZgyMcqYi%269qUE@db.vppczkvawiaptiygrqhx.supabase.co:5432/postgres`.
+3. Select Environments: **Production**, **Preview**, **Development**.
+4. Save and trigger a new deployment.
+
+---
+
+## 4. Rollback Procedure
 
 - If a deployment fails, revert to previous stable codebase branch or container tag.
 - SQLite database backups are maintained as `.db.bak` copies prior to migrations.

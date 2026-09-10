@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -268,7 +268,7 @@ async def health_check():
 
 @app.get("/api/v1/ready")
 @app.get("/api/v1/health/readiness")
-async def readiness_check(db: AsyncSession = Depends(get_db_session)):
+async def readiness_check(request: Request, db: AsyncSession = Depends(get_db_session)):
     """Deep readiness probe verifying database connectivity, disk health, and background worker status."""
     db_ok = False
     error_detail = None
@@ -288,7 +288,8 @@ async def readiness_check(db: AsyncSession = Depends(get_db_session)):
     # Check disk writable
     disk_writable = False
     try:
-        test_file = Path("./data/backups/.healthcheck_write_test")
+        write_dir = Path("/tmp/data/backups") if (os.environ.get("VERCEL") or not os.access(".", os.W_OK)) else Path("./data/backups")
+        test_file = write_dir / ".healthcheck_write_test"
         test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("ok", encoding="utf-8")
         if test_file.exists():
@@ -299,13 +300,19 @@ async def readiness_check(db: AsyncSession = Depends(get_db_session)):
 
     is_healthy = db_ok and disk_writable
 
-    payload = {
-        "status": "ready" if is_healthy else "degraded",
-        "database": {
+    is_ready_endpoint = request.url.path.rstrip("/").endswith("/ready")
+    if is_ready_endpoint:
+        db_field = "connected" if db_ok else "disconnected"
+    else:
+        db_field = {
             "connected": db_ok,
             "type": db_type,
             "error": error_detail
-        },
+        }
+
+    payload = {
+        "status": "ready" if is_healthy else "degraded",
+        "database": db_field,
         "storage": {
             "disk_writable": disk_writable
         },

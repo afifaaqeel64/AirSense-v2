@@ -4,34 +4,54 @@
   "name": "airsense-team",
   "cleanUrls": true,
   "trailingSlash": false,
-  "routes": [
+  "rewrites": [
     {
-      "src": "/hardware",
-      "dest": "/public/hardware.html"
+      "source": "/api/(.*)",
+      "destination": "/api"
     },
     {
-      "src": "/opensource",
-      "dest": "/public/opensource.html"
+      "source": "/docs",
+      "destination": "/api"
     },
     {
-      "src": "/command",
-      "dest": "/public/command.html"
+      "source": "/openapi.json",
+      "destination": "/api"
     },
     {
-      "src": "/ops",
-      "dest": "/public/command.html"
+      "source": "/hardware",
+      "destination": "/public/hardware.html"
     },
     {
-      "src": "/enterprise",
-      "dest": "/public/enterprise.html"
+      "source": "/opensource",
+      "destination": "/public/opensource.html"
     },
     {
-      "src": "/",
-      "dest": "/public/index.html"
+      "source": "/command",
+      "destination": "/public/command.html"
     },
     {
-      "src": "/(.*)",
-      "dest": "/public/$1"
+      "source": "/ops",
+      "destination": "/public/command.html"
+    },
+    {
+      "source": "/enterprise",
+      "destination": "/public/enterprise.html"
+    },
+    {
+      "source": "/diagnostics",
+      "destination": "/public/diagnostics.html"
+    },
+    {
+      "source": "/sensor-health",
+      "destination": "/public/diagnostics.html"
+    },
+    {
+      "source": "/",
+      "destination": "/public/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/public/$1"
     }
   ]
 }

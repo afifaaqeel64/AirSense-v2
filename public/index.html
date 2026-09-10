@@ -356,6 +356,12 @@
       border-color: rgba(239, 68, 68, 0.45);
     }
 
+    .badge-tag.status-stale {
+      background: rgba(245, 158, 11, 0.12);
+      color: #D97706;
+      border-color: rgba(245, 158, 11, 0.45);
+    }
+
     /* TELEMETRY FEED TABLE */
     .table-responsive {
       overflow-x: auto;
@@ -674,10 +680,14 @@
       <!-- BME280 -->
       <div id="cardBme" class="card offline-card">
         <div style="display:flex; justify-content:space-between; align-items:center;">
-          <span class="card-title">Bosch BME280 (I2C)</span>
+          <span class="card-title">Bosch BME280 / BMP280</span>
           <span id="bmeBadge" class="badge-tag status-unhealthy">OFFLINE</span>
         </div>
         <div class="card-val num-tabular"><span id="bmeVal" class="dimmed">--</span> <span id="bmeUnit" style="font-size:16px; color:var(--text-muted);">°C</span></div>
+        <div style="font-size:11px; color:var(--text-sub); display:flex; gap:16px; margin:4px 0;">
+          <span>Hum: <strong id="bmeHumVal">--</strong>%</span>
+          <span>Press: <strong id="bmePressVal">--</strong> hPa</span>
+        </div>
         <div style="font-size:11px; color:var(--text-sub);">Pins: <code>GPIO 21 (SDA) / 22 (SCL)</code> • 3.3V Rail</div>
         <div id="bmeDiag" style="font-size:10.5px; color:var(--status-disconnected);">
           Awaiting I2C telemetry frame.
@@ -720,9 +730,14 @@
           </h3>
           <p style="font-size:11.5px; color:var(--text-sub);">Direct database records streamed from on-site ESP32</p>
         </div>
-        <button onclick="exportTelemetryCSV()" class="action-btn" style="background:var(--blue-600); color:#FFF; border:none; cursor:pointer;">
-          EXPORT CSV
-        </button>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <a href="/api/v1/hardware/daily-csv" target="_blank" download class="action-btn" style="background:var(--card-bg, #1E293B); color:var(--text-main, #F1F5F9); border:1px solid rgba(255,255,255,0.2); text-decoration:none; display:inline-flex; align-items:center; padding:6px 12px; border-radius:6px; font-size:12px; font-weight:700;">
+            DAILY 24H CSV
+          </a>
+          <button onclick="exportTelemetryCSV()" class="action-btn" style="background:var(--blue-600); color:#FFF; border:none; cursor:pointer;">
+            EXPORT BUFFER
+          </button>
+        </div>
       </div>
 
       <div class="table-responsive">
@@ -786,6 +801,7 @@
             <li><a href="/api/v1/ingest/sensors/diagnostic" target="_blank">Live Hardware Diagnostics API</a></li>
             <li><a href="/api/v1/hardware/minute-history?limit=30" target="_blank">Minute Telemetry Stream</a></li>
             <li><a href="/api/v1/hardware/minute-export.csv" target="_blank">Download Minute CSV Backup</a></li>
+            <li><a href="/api/v1/hardware/daily-csv" target="_blank" download>Download 24h Daily CSV Backup</a></li>
             <li><a href="/docs" target="_blank">FastAPI OpenAPI Docs</a></li>
           </ul>
         </div>
@@ -841,22 +857,46 @@
       });
 
       const pBadge = document.getElementById('pmsBadge');
-      if (pBadge) { pBadge.textContent = 'OFFLINE'; pBadge.className = 'badge-tag status-unhealthy'; }
+      const pVal = document.getElementById('pmsVal');
+      if (pVal && pVal.textContent && pVal.textContent.trim() !== '--') {
+        if (pBadge) { pBadge.textContent = 'STALE'; pBadge.className = 'badge-tag status-stale'; }
+      } else {
+        if (pBadge) { pBadge.textContent = 'OFFLINE'; pBadge.className = 'badge-tag status-unhealthy'; }
+        if (pVal) { pVal.textContent = '--'; }
+      }
       const pDiag = document.getElementById('pmsDiag');
       if (pDiag) { pDiag.textContent = 'Awaiting hardware packet.'; pDiag.style.color = 'var(--status-disconnected)'; }
 
       const bBadge = document.getElementById('bmeBadge');
-      if (bBadge) { bBadge.textContent = 'OFFLINE'; bBadge.className = 'badge-tag status-unhealthy'; }
+      const bVal = document.getElementById('bmeVal');
+      if (bVal && bVal.textContent && bVal.textContent.trim() !== '--') {
+        if (bBadge) { bBadge.textContent = 'STALE'; bBadge.className = 'badge-tag status-stale'; }
+      } else {
+        if (bBadge) { bBadge.textContent = 'OFFLINE'; bBadge.className = 'badge-tag status-unhealthy'; }
+        if (bVal) { bVal.textContent = '--'; }
+        const bHum = document.getElementById('bmeHumVal');
+        if (bHum) { bHum.textContent = '--'; }
+        const bPress = document.getElementById('bmePressVal');
+        if (bPress) { bPress.textContent = '--'; }
+      }
       const bDiag = document.getElementById('bmeDiag');
       if (bDiag) { bDiag.textContent = 'I2C bus paused.'; bDiag.style.color = 'var(--status-disconnected)'; }
 
       const rBadge = document.getElementById('rainBadge');
-      if (rBadge) { rBadge.textContent = 'OFFLINE'; rBadge.className = 'badge-tag status-unhealthy'; }
+      const rVal = document.getElementById('rainVal');
+      if (rVal && rVal.textContent && rVal.textContent.trim() !== '--') {
+        if (rBadge) { rBadge.textContent = 'STALE'; rBadge.className = 'badge-tag status-stale'; }
+      } else {
+        if (rBadge) { rBadge.textContent = 'OFFLINE'; rBadge.className = 'badge-tag status-unhealthy'; }
+        if (rVal) { rVal.innerHTML = '--'; rVal.className = 'card-val num-tabular dimmed'; }
+      }
       const rDiag = document.getElementById('rainDiag');
       if (rDiag) { rDiag.textContent = 'ADC unread.'; rDiag.style.color = 'var(--status-disconnected)'; }
 
       const sBadge = document.getElementById('sdBadge');
       if (sBadge) { sBadge.textContent = 'OFFLINE'; sBadge.className = 'badge-tag status-unhealthy'; }
+      const sVal = document.getElementById('sdVal');
+      if (sVal) { sVal.textContent = 'OFFLINE'; sVal.className = 'card-val dimmed'; }
       const sDiag = document.getElementById('sdDiag');
       if (sDiag) { sDiag.textContent = 'Storage paused.'; sDiag.style.color = 'var(--status-disconnected)'; }
     }
@@ -886,20 +926,54 @@
         const pBadge = document.getElementById('pmsBadge');
         if (pBadge) { pBadge.textContent = 'ONLINE'; pBadge.className = 'badge-tag'; }
         const pVal = document.getElementById('pmsVal');
-        if (pVal) { pVal.className = ''; pVal.textContent = Number(pms.last_valid_value.pm2_5).toFixed(1); }
+        if (pVal) { pVal.className = ''; pVal.textContent = pms.last_valid_value?.pm2_5 != null ? Number(pms.last_valid_value.pm2_5).toFixed(1) : '--'; }
         const pDiag = document.getElementById('pmsDiag');
         if (pDiag) { pDiag.textContent = pms.diagnostic_message || 'UART2 active.'; pDiag.style.color = 'var(--blue-700)'; }
+      } else {
+        const pCard = document.getElementById('cardPms');
+        if (pCard) pCard.classList.add('offline-card');
+        const pBadge = document.getElementById('pmsBadge');
+        const pVal = document.getElementById('pmsVal');
+        if (pVal && pVal.textContent && pVal.textContent.trim() !== '--') {
+          if (pBadge) { pBadge.textContent = 'STALE'; pBadge.className = 'badge-tag status-stale'; }
+        } else {
+          if (pBadge) { pBadge.textContent = 'OFFLINE'; pBadge.className = 'badge-tag status-unhealthy'; }
+          if (pVal) { pVal.className = 'dimmed'; pVal.textContent = '--'; }
+        }
+        const pDiag = document.getElementById('pmsDiag');
+        if (pDiag) { pDiag.textContent = pms?.diagnostic_message || 'Awaiting hardware packet.'; pDiag.style.color = 'var(--status-disconnected)'; }
       }
 
-      // BME280
+      // BME280 / BMP280
       const bme = data.sensors?.bme280;
       if (bme && bme.is_connected) {
         const bBadge = document.getElementById('bmeBadge');
         if (bBadge) { bBadge.textContent = 'ONLINE'; bBadge.className = 'badge-tag'; }
         const bVal = document.getElementById('bmeVal');
-        if (bVal) { bVal.className = ''; bVal.textContent = Number(bme.last_valid_value.temperature_c).toFixed(1); }
+        if (bVal) { bVal.className = ''; bVal.textContent = bme.last_valid_value?.temperature_c != null ? Number(bme.last_valid_value.temperature_c).toFixed(1) : '--'; }
+        const bHum = document.getElementById('bmeHumVal');
+        if (bHum) { bHum.textContent = (bme.last_valid_value?.humidity_pct != null && bme.last_valid_value.humidity_pct !== '--') ? Number(bme.last_valid_value.humidity_pct).toFixed(1) : '--'; }
+        const bPress = document.getElementById('bmePressVal');
+        if (bPress) { bPress.textContent = (bme.last_valid_value?.pressure_hpa != null && bme.last_valid_value.pressure_hpa !== '--') ? Number(bme.last_valid_value.pressure_hpa).toFixed(1) : '--'; }
         const bDiag = document.getElementById('bmeDiag');
         if (bDiag) { bDiag.textContent = bme.diagnostic_message || 'I2C active.'; bDiag.style.color = 'var(--blue-700)'; }
+      } else {
+        const bCard = document.getElementById('cardBme');
+        if (bCard) bCard.classList.add('offline-card');
+        const bBadge = document.getElementById('bmeBadge');
+        const bVal = document.getElementById('bmeVal');
+        if (bVal && bVal.textContent && bVal.textContent.trim() !== '--') {
+          if (bBadge) { bBadge.textContent = 'STALE'; bBadge.className = 'badge-tag status-stale'; }
+        } else {
+          if (bBadge) { bBadge.textContent = 'OFFLINE'; bBadge.className = 'badge-tag status-unhealthy'; }
+          if (bVal) { bVal.className = 'dimmed'; bVal.textContent = '--'; }
+          const bHum = document.getElementById('bmeHumVal');
+          if (bHum) { bHum.textContent = '--'; }
+          const bPress = document.getElementById('bmePressVal');
+          if (bPress) { bPress.textContent = '--'; }
+        }
+        const bDiag = document.getElementById('bmeDiag');
+        if (bDiag) { bDiag.textContent = bme?.diagnostic_message || 'I2C bus paused.'; bDiag.style.color = 'var(--status-disconnected)'; }
       }
 
       // Rain
@@ -910,11 +984,24 @@
         const rVal = document.getElementById('rainVal');
         if (rVal) {
           rVal.className = 'card-val num-tabular';
-          const isWet = rain.last_valid_value.rain_flag;
+          const isWet = rain.last_valid_value?.rain_flag;
           rVal.innerHTML = isWet ? '<span style="color:#DC2626; font-weight:800;">WET (RAIN)</span>' : '<span style="color:#059669; font-weight:800;">DRY</span>';
         }
         const rDiag = document.getElementById('rainDiag');
         if (rDiag) { rDiag.textContent = rain.diagnostic_message || 'ADC active.'; rDiag.style.color = 'var(--blue-700)'; }
+      } else {
+        const rCard = document.getElementById('cardRain');
+        if (rCard) rCard.classList.add('offline-card');
+        const rBadge = document.getElementById('rainBadge');
+        const rVal = document.getElementById('rainVal');
+        if (rVal && rVal.textContent && !rVal.textContent.includes('--')) {
+          if (rBadge) { rBadge.textContent = 'STALE'; rBadge.className = 'badge-tag status-stale'; }
+        } else {
+          if (rBadge) { rBadge.textContent = 'OFFLINE'; rBadge.className = 'badge-tag status-unhealthy'; }
+          if (rVal) { rVal.innerHTML = '--'; rVal.className = 'card-val num-tabular dimmed'; }
+        }
+        const rDiag = document.getElementById('rainDiag');
+        if (rDiag) { rDiag.textContent = rain?.diagnostic_message || 'ADC unread.'; rDiag.style.color = 'var(--status-disconnected)'; }
       }
 
       // SD
@@ -926,6 +1013,15 @@
         if (sVal) { sVal.className = 'card-val'; sVal.textContent = 'LOGGING READY'; }
         const sDiag = document.getElementById('sdDiag');
         if (sDiag) { sDiag.textContent = sd.diagnostic_message || 'VSPI active.'; sDiag.style.color = 'var(--blue-700)'; }
+      } else {
+        const sCard = document.getElementById('cardSd');
+        if (sCard) sCard.classList.add('offline-card');
+        const sBadge = document.getElementById('sdBadge');
+        if (sBadge) { sBadge.textContent = 'OFFLINE'; sBadge.className = 'badge-tag status-unhealthy'; }
+        const sVal = document.getElementById('sdVal');
+        if (sVal) { sVal.className = 'card-val dimmed'; sVal.textContent = 'OFFLINE'; }
+        const sDiag = document.getElementById('sdDiag');
+        if (sDiag) { sDiag.textContent = sd?.diagnostic_message || 'Storage paused.'; sDiag.style.color = 'var(--status-disconnected)'; }
       }
     }
 
@@ -962,9 +1058,9 @@
           <td>${r.pm1}</td>
           <td style="color:var(--blue-700); font-weight:800;">${r.pm25}</td>
           <td>${r.pm10}</td>
-          <td>${r.temp}°C</td>
-          <td>${r.hum}%</td>
-          <td>${r.press} hPa</td>
+          <td>${r.temp !== '--' ? r.temp + '°C' : '--'}</td>
+          <td>${r.hum !== '--' ? r.hum + '%' : '--'}</td>
+          <td>${r.press !== '--' ? r.press + ' hPa' : '--'}</td>
           <td>${r.rain ? '<span style="color:#DC2626; font-weight:700;">WET</span>' : 'DRY'}</td>
           <td><span class="badge-tag" style="background:rgba(16, 185, 129, 0.15); color:#059669;">${r.qc}</span></td>
         </tr>
@@ -972,12 +1068,22 @@
     }
 
     function addTelemetryRecord(p) {
-      const pm1Val = p.pm1 !== undefined && p.pm1 !== null ? Number(p.pm1).toFixed(1) : (p.pm1_0 !== undefined ? Number(p.pm1_0).toFixed(1) : '15.0');
-      const pm25Val = p.pm2_5 !== undefined && p.pm2_5 !== null ? Number(p.pm2_5).toFixed(1) : (p.pm25 !== undefined ? Number(p.pm25).toFixed(1) : '24.0');
-      const pm10Val = p.pm10 !== undefined && p.pm10 !== null ? Number(p.pm10).toFixed(1) : (p.pm_10 !== undefined ? Number(p.pm_10).toFixed(1) : '28.0');
-      const tempVal = p.temperature !== undefined && p.temperature !== null ? Number(p.temperature).toFixed(1) : (p.temperature_c !== undefined ? Number(p.temperature_c).toFixed(1) : '29.5');
-      const humVal = p.humidity !== undefined && p.humidity !== null ? Number(p.humidity).toFixed(1) : (p.humidity_pct !== undefined ? Number(p.humidity_pct).toFixed(1) : '65.0');
-      const pressVal = p.pressure !== undefined && p.pressure !== null ? Number(p.pressure).toFixed(1) : (p.pressure_hpa !== undefined ? Number(p.pressure_hpa).toFixed(1) : '1012.0');
+      if (!p) return;
+      // Do not append empty or rain-only records into the telemetry history table
+      const hasRealReading = (
+        (p.pm2_5 !== undefined && p.pm2_5 !== null && p.pm2_5 !== '--') ||
+        (p.pm25 !== undefined && p.pm25 !== null && p.pm25 !== '--') ||
+        (p.temperature !== undefined && p.temperature !== null && p.temperature !== '--') ||
+        (p.temperature_c !== undefined && p.temperature_c !== null && p.temperature_c !== '--')
+      );
+      if (!hasRealReading) return;
+
+      const pm1Val = (p.pm1 !== undefined && p.pm1 !== null) ? Number(p.pm1).toFixed(1) : (p.pm1_0 !== undefined && p.pm1_0 !== null ? Number(p.pm1_0).toFixed(1) : '--');
+      const pm25Val = (p.pm2_5 !== undefined && p.pm2_5 !== null) ? Number(p.pm2_5).toFixed(1) : (p.pm25 !== undefined && p.pm25 !== null ? Number(p.pm25).toFixed(1) : '--');
+      const pm10Val = (p.pm10 !== undefined && p.pm10 !== null) ? Number(p.pm10).toFixed(1) : (p.pm_10 !== undefined && p.pm_10 !== null ? Number(p.pm_10).toFixed(1) : '--');
+      const tempVal = (p.temperature !== undefined && p.temperature !== null) ? Number(p.temperature).toFixed(1) : (p.temperature_c !== undefined && p.temperature_c !== null ? Number(p.temperature_c).toFixed(1) : '--');
+      const humVal = (p.humidity !== undefined && p.humidity !== null) ? Number(p.humidity).toFixed(1) : (p.humidity_pct !== undefined && p.humidity_pct !== null ? Number(p.humidity_pct).toFixed(1) : '--');
+      const pressVal = (p.pressure !== undefined && p.pressure !== null) ? Number(p.pressure).toFixed(1) : (p.pressure_hpa !== undefined && p.pressure_hpa !== null ? Number(p.pressure_hpa).toFixed(1) : '--');
       const rainFlag = Boolean(p.rain_flag);
 
       const timeStr = (p.timestamp_epoch && Number(p.timestamp_epoch) > 1700000000)
@@ -997,9 +1103,56 @@
         qc: 'VERIFIED RAW'
       };
       savedTelemetryRecords.unshift(newRec);
-      if (savedTelemetryRecords.length > 30) savedTelemetryRecords.pop();
+      if (savedTelemetryRecords.length > 120) savedTelemetryRecords.pop();
       try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
       renderTelemetryTable();
+    }
+
+    let hasHydratedTelemetry = false;
+    async function hydrateHistoricalTelemetry() {
+      const force = arguments.length > 0 && arguments[0] === true;
+      if (hasHydratedTelemetry && !force) return;
+      try {
+        const res = await fetch('/api/v1/hardware/minute-history?limit=120');
+        if (!res.ok) return;
+        const history = await res.json();
+        if (Array.isArray(history) && history.length > 0) {
+          const newRecords = history.map(r => {
+            const timeStr = r.timestamp_utc ? new Date(r.timestamp_utc).toLocaleTimeString() : new Date().toLocaleTimeString();
+            return {
+              time: timeStr,
+              timestamp_utc: r.timestamp_utc || null,
+              source: r.station || 'ESP32 ON-SITE',
+              pm1: (r.pm1 !== undefined && r.pm1 !== null) ? Number(r.pm1).toFixed(1) : '--',
+              pm25: (r.pm2_5 !== undefined && r.pm2_5 !== null) ? Number(r.pm2_5).toFixed(1) : (r.pm25 !== undefined ? Number(r.pm25).toFixed(1) : '--'),
+              pm10: (r.pm10 !== undefined && r.pm10 !== null) ? Number(r.pm10).toFixed(1) : '--',
+              temp: (r.temperature_c !== undefined && r.temperature_c !== null) ? Number(r.temperature_c).toFixed(1) : (r.temp !== undefined ? Number(r.temp).toFixed(1) : '--'),
+              hum: (r.humidity_pct !== undefined && r.humidity_pct !== null) ? Number(r.humidity_pct).toFixed(1) : (r.hum !== undefined ? Number(r.hum).toFixed(1) : '--'),
+              press: (r.pressure_hpa !== undefined && r.pressure_hpa !== null) ? Number(r.pressure_hpa).toFixed(1) : (r.press !== undefined ? Number(r.press).toFixed(1) : '--'),
+              rain: r.rain_state === 'Wet' || Boolean(r.rain_flag || r.rain),
+              qc: 'VERIFIED RAW'
+            };
+          });
+
+          // Merge without losing recent live packets
+          const seen = new Set();
+          const merged = [];
+          for (const item of [...savedTelemetryRecords, ...newRecords]) {
+            const key = item.timestamp_utc || (item.time + '-' + item.pm25);
+            if (!seen.has(key)) {
+              seen.add(key);
+              merged.push(item);
+            }
+          }
+          savedTelemetryRecords = merged.slice(0, 120);
+          if (savedTelemetryRecords.length > 120) savedTelemetryRecords.length = 120;
+          try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
+          renderTelemetryTable();
+          hasHydratedTelemetry = true;
+        }
+      } catch (err) {
+        console.warn('[Hydration] Could not hydrate historical telemetry:', err);
+      }
     }
 
     window.exportTelemetryCSV = function() {
@@ -1035,8 +1188,14 @@
     // =========================================================================
     function applyLiveTelemetryPacket(p) {
       if (!p) return;
-      // Must contain actual sensor telemetry fields
-      const hasSensorData = (p.pm2_5 !== undefined || p.pm25 !== undefined || p.temperature !== undefined || p.temperature_c !== undefined || p.humidity !== undefined);
+      // Must contain actual sensor telemetry fields (not null/empty)
+      const hasSensorData = (
+        (p.pm2_5 !== undefined && p.pm2_5 !== null) ||
+        (p.pm25 !== undefined && p.pm25 !== null) ||
+        (p.temperature !== undefined && p.temperature !== null) ||
+        (p.temperature_c !== undefined && p.temperature_c !== null) ||
+        (p.humidity !== undefined && p.humidity !== null)
+      );
       if (!hasSensorData) return;
 
       lastMqttPacketTime = Date.now();
@@ -1083,6 +1242,7 @@
     }
 
     function initCloudMQTT() {
+      hydrateHistoricalTelemetry();
       if (typeof Paho === 'undefined' || !Paho.MQTT || !Paho.MQTT.Client) {
         console.log('[MQTT] Loading Paho MQTT WebSocket client...');
         setTimeout(initCloudMQTT, 300);
@@ -1123,7 +1283,6 @@
           timeout: 10,
           keepAliveInterval: 30,
           cleanSession: true,
-          reconnect: true,
           onSuccess: function () {
             isMqttConnecting = false;
             console.log("[MQTT] Connected to Global Cloud Broker via WebSocket (" + mqttHost + ":" + mqttPort + ")!");
@@ -1148,10 +1307,10 @@
       if (lastMqttPacketTime > 0) {
         const elapsed = Math.round((now - lastMqttPacketTime) / 1000);
         const lastSeen = document.getElementById('lastSeenText');
-        if (elapsed <= 15) {
+        if (elapsed <= 35) {
           if (lastSeen) lastSeen.textContent = `(${elapsed}s ago)`;
         } else {
-          // Hardware silent for > 15s: mark disconnected immediately and cease fresh readings
+          // Hardware silent for > 35s: mark disconnected immediately and cease fresh readings
           renderDisconnectedUI(elapsed);
         }
       } else {
@@ -1164,18 +1323,20 @@
         const res = await fetch('/api/v1/ingest/sensors/diagnostic');
         if (!res.ok) return;
         const data = await res.json();
-        if ((data.station_liveness === 'LIVE_ACTIVE' || data.station_liveness === 'PARTIAL_DEGRADED') && data.seconds_since_last_packet <= 15) {
-          lastMqttPacketTime = Date.now() - (data.seconds_since_last_packet * 1000);
+        if ((data.station_liveness === 'LIVE_ACTIVE' || data.station_liveness === 'PARTIAL_DEGRADED') && data.seconds_since_last_packet <= 35) {
+          const lagMs = Math.min((data.seconds_since_last_packet || 0) * 1000, 2000);
+          lastMqttPacketTime = Math.max(lastMqttPacketTime, Date.now() - lagMs);
           renderConnectedUI(data);
 
           const pms = data.sensors?.pms7003?.last_valid_value;
           const bme = data.sensors?.bme280?.last_valid_value;
           const rain = data.sensors?.rain_sensor?.last_valid_value;
-          if (pms && pms.pm2_5 !== undefined) {
+          const hasValidTelemetry = (pms && pms.pm2_5 !== undefined && pms.pm2_5 !== null) || (bme && bme.temperature_c !== undefined && bme.temperature_c !== null);
+          if (hasValidTelemetry) {
             addTelemetryRecord({
-              pm1: pms.pm1,
-              pm2_5: pms.pm2_5,
-              pm10: pms.pm10,
+              pm1: pms?.pm1 ?? null,
+              pm2_5: pms?.pm2_5 ?? null,
+              pm10: pms?.pm10 ?? null,
               temperature: bme ? bme.temperature_c : null,
               humidity: bme ? bme.humidity_pct : null,
               pressure: bme ? bme.pressure_hpa : null,
@@ -1183,7 +1344,7 @@
             });
           }
         } else {
-          // Instantly mark disconnected if packet age exceeds 15s
+          // Instantly mark disconnected if packet age exceeds 35s
           renderDisconnectedUI(data.seconds_since_last_packet);
         }
       } catch (err) {}
@@ -1195,48 +1356,41 @@
       }
 
       try {
-        const res = await fetch('/api/v1/ingest/latest?limit=15');
-        if (!res.ok) return;
-        const packets = await res.json();
-        
-        const tbody = document.getElementById('telemetryTableBody');
-        if (!packets || packets.length === 0) {
-          if (tbody.rows.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:20px; color:var(--text-muted);">Awaiting physical ESP32 packets...</td></tr>';
-          }
-          return;
-        }
-
-        tbody.innerHTML = packets.map(p => {
-          const timeStr = p.observed_at ? new Date(p.observed_at).toUTCString().substring(17, 25) : '--';
-          const isHardware = p.source === 'onsite_esp32';
-          return `
-            <tr>
-              <td><strong>${timeStr}</strong></td>
-              <td><span class="badge-tag" style="background:${isHardware ? 'var(--blue-100)' : 'var(--bg-card-subtle)'};">${isHardware ? 'ESP32 ON-SITE' : 'OPEN-SOURCE'}</span></td>
-              <td>${p.pm1 !== null ? Number(p.pm1).toFixed(1) : '--'}</td>
-              <td style="color:var(--blue-700); font-weight:800;">${p.pm2_5 !== null ? Number(p.pm2_5).toFixed(1) : '--'}</td>
-              <td>${p.pm10 !== null ? Number(p.pm10).toFixed(1) : '--'}</td>
-              <td>${p.temperature_c !== null ? Number(p.temperature_c).toFixed(1) + '°C' : '--'}</td>
-              <td>${p.humidity_pct !== null ? Number(p.humidity_pct).toFixed(1) + '%' : '--'}</td>
-              <td>${p.pressure_hpa !== null ? Number(p.pressure_hpa).toFixed(1) + ' hPa' : '--'}</td>
-              <td>${p.rain_flag ? '<span style="color:#DC2626; font-weight:700;">WET</span>' : 'DRY'}</td>
-              <td><span class="badge-tag">${isHardware ? 'VERIFIED RAW' : 'OPEN-SOURCE'}</span></td>
-            </tr>
-          `;
-        }).join('');
+        await hydrateHistoricalTelemetry(true);
       } catch (err) {
         // Standalone Cloud mode
       }
     }
 
-    // Initialize Telemetry Table, Cloud MQTT, and Watchdog (1-minute cadence)
+    async function handleTabResume() {
+      console.log('[AirSense] Tab resumed or focused - refreshing telemetry & checking broker connection...');
+      await hydrateHistoricalTelemetry(true);
+      await fetchHardwareDiagnostics();
+      if (!mqttClient || !mqttClient.isConnected()) {
+        try { if (mqttClient) mqttClient.disconnect(); } catch(e) {}
+        initCloudMQTT();
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        handleTabResume();
+      }
+    });
+    window.addEventListener('focus', handleTabResume);
+
+    // Initialize Telemetry Table, Historical Hydration, Cloud MQTT, and Watchdog (1-minute cadence)
     renderTelemetryTable();
+    hydrateHistoricalTelemetry();
     initCloudMQTT();
     fetchHardwareDiagnostics();
     setInterval(checkSilenceWatchdog, 1000);
     setInterval(fetchHardwareDiagnostics, 10000);
     setInterval(fetchLatestTelemetry, 30000);
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', hydrateHistoricalTelemetry);
+    }
   </script>
 </body>
 </html>

@@ -298,8 +298,15 @@ class TestTopicRoutingAndCollisionStress:
         received = []
         stress_uuid = uuid.uuid4().hex
 
+        def on_msg(c, u, msg):
+            try:
+                payload_str = msg.payload.decode("utf-8", errors="ignore")
+                if stress_uuid in payload_str:
+                    received.append(payload_str)
+            except Exception:
+                pass
         sub_khi.on_connect = lambda c, u, f, rc, p=None: (c.subscribe(PRIMARY_TOPIC), khi_ready.set())
-        sub_khi.on_message = lambda c, u, msg: received.append(msg.payload.decode("utf-8", errors="ignore"))
+        sub_khi.on_message = on_msg
 
         try:
             sub_khi.connect(HIVEMQ_HOST, MQTT_PORT, keepalive=30)
@@ -317,7 +324,10 @@ class TestTopicRoutingAndCollisionStress:
 
             # Now publish valid topic
             pub_client.publish(PRIMARY_TOPIC, json.dumps({"stress_uuid": stress_uuid, "valid": True}))
-            time.sleep(1.5)
+            for _ in range(30):
+                if len(received) >= 1:
+                    break
+                time.sleep(0.1)
 
             assert len(received) == 1, f"Expected 1 valid message, got {len(received)}"
             assert '"valid": true' in received[0].lower()

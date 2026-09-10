@@ -71,7 +71,10 @@ class Settings(BaseSettings):
     BACKGROUND_SCHEDULER_ENABLED: bool = True
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(
+            str(Path(__file__).resolve().parent.parent.parent.parent / ".env"),
+            ".env"
+        ),
         env_file_encoding="utf-8",
         extra="ignore"
     )

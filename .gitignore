@@ -68,5 +68,9 @@ redisdata/
 *.swo
 .DS_Store
 Thumbs.db
+desktop.ini
+.pip_cache/
+cloudflared.exe
+scratch/
 
 .vercel

@@ -21,10 +21,15 @@ from scripts.airsense_serial_live_bridge import (
     find_esp32_port,
     scan_available_ports,
     push_to_local_api,
+    push_to_endpoint,
+    push_telemetry_dual_async,
+    run_simulation_mode,
     build_telemetry_payload,
     parse_serial_line,
     DualBrokerMqttPublisher,
-    run_bridge
+    run_bridge,
+    AIRSENSE_LOCAL_API_URL,
+    AIRSENSE_CLOUD_API_URL
 )
 
 
@@ -355,3 +360,88 @@ class TestDualBrokerMqttPublisher:
         assert p["rain_flag"] is True
         assert p["sensor_health"]["pms7003"] == "OK"
         assert p["sensor_health"]["bme280"] == "OK"
+
+
+class TestDualRoutingAndSimulationMode:
+    """Verifies dual-routing HTTP dispatch, ThreadPoolExecutor concurrency, and simulation mode."""
+
+    @patch("urllib.request.urlopen")
+    def test_push_to_endpoint_success(self, mock_urlopen):
+        """push_to_endpoint returns True on HTTP 200/201 response."""
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        payload = {"device_uid": "AIRSENSE-NODE-KHI-01", "pm2_5": 15.0}
+        success = push_to_endpoint("http://127.0.0.1:8000/api/v1/ingest/reading", payload, "TEST")
+        assert success is True
+        assert mock_urlopen.called
+        req = mock_urlopen.call_args[0][0]
+        assert req.get_header("X-device-token") == "airsense_dev_token_khi_01"
+        assert req.get_method() == "POST"
+
+    @patch("urllib.request.urlopen")
+    def test_push_to_endpoint_http_error(self, mock_urlopen):
+        """push_to_endpoint returns False on HTTP 500 error."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError("http://test", 500, "Internal Error", {}, None)
+        success = push_to_endpoint("http://test/ingest", {"pm2_5": 10.0})
+        assert success is False
+
+    @patch("urllib.request.urlopen")
+    def test_push_to_endpoint_timeout_and_network_error(self, mock_urlopen):
+        """push_to_endpoint suppresses TimeoutError and URLError gracefully."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.URLError("Connection timed out")
+        success = push_to_endpoint("http://test/ingest", {"pm2_5": 10.0})
+        assert success is False
+
+    def test_push_to_endpoint_empty_url_returns_false(self):
+        """push_to_endpoint returns False immediately if url is None or empty."""
+        assert push_to_endpoint("", {"pm2_5": 10.0}) is False
+        assert push_to_endpoint(None, {"pm2_5": 10.0}) is False
+
+    @patch("scripts.airsense_serial_live_bridge.http_pool.submit")
+    def test_push_telemetry_dual_async_dispatches_both(self, mock_submit):
+        """push_telemetry_dual_async submits separate tasks for local and cloud URLs."""
+        payload = {"sequence_number": 42, "pm2_5": 12.0}
+        futures = push_telemetry_dual_async(
+            payload,
+            local_url="http://127.0.0.1:8000/api/v1/ingest/reading",
+            cloud_url="https://airsense-api.onrender.com/api/v1/ingest/reading"
+        )
+        assert mock_submit.call_count == 2
+        calls = mock_submit.call_args_list
+        urls_called = [c[0][1] for c in calls]
+        assert "http://127.0.0.1:8000/api/v1/ingest/reading" in urls_called
+        assert "https://airsense-api.onrender.com/api/v1/ingest/reading" in urls_called
+
+    @patch("scripts.airsense_serial_live_bridge.http_pool.submit")
+    def test_push_telemetry_dual_async_only_local_when_no_cloud(self, mock_submit):
+        """push_telemetry_dual_async only submits local task if cloud_url is None."""
+        payload = {"sequence_number": 42, "pm2_5": 12.0}
+        futures = push_telemetry_dual_async(
+            payload,
+            local_url="http://127.0.0.1:8000/api/v1/ingest/reading",
+            cloud_url=None
+        )
+        assert mock_submit.call_count == 1
+        assert mock_submit.call_args[0][1] == "http://127.0.0.1:8000/api/v1/ingest/reading"
+
+    @patch("scripts.airsense_serial_live_bridge.push_telemetry_dual_async")
+    @patch("scripts.airsense_serial_live_bridge.DualBrokerMqttPublisher")
+    def test_run_simulation_mode_emits_synthetic_payload(self, mock_mqtt, mock_push_dual):
+        """run_simulation_mode generates synthetic payload, triggers MQTT and dual HTTP dispatch."""
+        mock_push_dual.return_value = []
+        payload = run_simulation_mode(
+            cloud_url="https://airsense-api.onrender.com/api/v1/ingest/reading",
+            local_url="http://127.0.0.1:8000/api/v1/ingest/reading",
+            wait_for_completion=False
+        )
+        assert payload is not None
+        assert payload["schema_version"] == "1.0"
+        assert payload["device_uid"] == "AIRSENSE-NODE-KHI-01"
+        assert payload["transmission_mode"] == "SERIAL_BRIDGE_SIMULATE"
+        assert payload["pm2_5"] > 0
+        assert mock_push_dual.called
+        assert mock_mqtt.called

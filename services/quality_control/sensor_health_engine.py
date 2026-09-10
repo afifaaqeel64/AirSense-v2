@@ -92,10 +92,10 @@ class SensorHealthEngine:
             raw_health = latest_reading.get("sensor_health") or {}
             bme_hw_flag = raw_health.get("bme280") if isinstance(raw_health, dict) else None
 
-            if temp is not None and hum is not None and press is not None:
+            if temp is not None and press is not None:
                 t_val = float(temp)
-                h_val = float(hum)
                 p_val = float(press)
+                h_val = float(hum) if hum is not None else None
 
                 # Check if sensor payload explicitly reported hardware disconnection or error
                 if bme_hw_flag in ("DISCONNECTED", "ERROR", "FROZEN_STUCK", "DEGRADED_FROZEN"):
@@ -104,18 +104,22 @@ class SensorHealthEngine:
                     bme_msg = f"ESP32 firmware reported BME280 I2C fault ({bme_hw_flag}). Data is fallback/unverified."
                     bme_fix = "Check wiring: SDA->GPIO 21, SCL->GPIO 22, CSB->3.3V, and verify 3.3V supply."
                 # Check for known static emergency fallback constants
-                elif round(t_val, 1) == 29.5 and round(h_val, 1) == 65.0 and round(p_val, 1) == 1012.0:
+                elif round(t_val, 1) == 29.5 and (h_val is None or round(h_val, 1) == 65.0) and round(p_val, 1) == 1012.0:
                     bme_status = "DEGRADED"
                     bme_connected = False
                     bme_msg = "BME280 is outputting static emergency fallback constants (29.5°C, 65.0%, 1012.0 hPa). Physical sensor not communicating over I2C."
                     bme_val = {"temperature_c": t_val, "humidity_pct": h_val, "pressure_hpa": p_val, "is_fallback": True}
                     bme_fix = "Check 3.3V rail, SDA->GPIO 21, SCL->GPIO 22, and pull CSB pin HIGH to 3.3V to enable I2C mode."
-                # Valid physical operational bounds
-                elif -20.0 <= t_val <= 65.0 and 1.0 <= h_val <= 100.0 and 800.0 <= p_val <= 1100.0:
+                # Valid physical operational bounds (supports BME280 with humidity, and BMP280 without humidity)
+                elif -20.0 <= t_val <= 65.0 and (h_val is None or (1.0 <= h_val <= 100.0)) and 800.0 <= p_val <= 1100.0:
                     bme_connected = True
                     bme_status = "ONLINE"
-                    bme_msg = "I2C bus responsive, factory calibration coefficients verified."
-                    bme_val = {"temperature_c": t_val, "humidity_pct": h_val, "pressure_hpa": p_val}
+                    if h_val is not None:
+                        bme_msg = "I2C bus responsive, factory calibration coefficients verified."
+                        bme_val = {"temperature_c": t_val, "humidity_pct": h_val, "pressure_hpa": p_val}
+                    else:
+                        bme_msg = "BMP280 operational (temperature and barometric pressure active, no humidity channel)."
+                        bme_val = {"temperature_c": t_val, "humidity_pct": None, "pressure_hpa": p_val}
                     bme_fix = None
                 else:
                     bme_status = "DEGRADED"
@@ -147,11 +151,19 @@ class SensorHealthEngine:
         sd_fix = "Ensure FAT32 Samsung EVO card is inserted and CS -> GPIO 5, SCK -> GPIO 18, MOSI -> GPIO 23, MISO -> GPIO 19."
 
         if is_station_alive:
-            # If payload arrived via HTTP/MQTT with valid sequence, check SD status flag
-            sd_connected = True
-            sd_status = "ONLINE"
-            sd_msg = "VSPI bus mounted, circular CSV offline logging ready."
-            sd_fix = None
+            raw_health_dict = raw_health if (latest_reading and isinstance(raw_health, dict)) else {}
+            sd_hw_flag = raw_health_dict.get("microsd")
+            if sd_hw_flag in ("DISCONNECTED", "ERROR", "FAULT"):
+                sd_connected = False
+                sd_status = "DISCONNECTED"
+                sd_msg = "MicroSD SPI initialization failed or card absent on VSPI bus."
+                sd_fix = "Check FAT32 formatting and SPI wiring (CS->GPIO 5, SCK->18, MOSI->23, MISO->19)."
+            else:
+                # If payload arrived via HTTP/MQTT with valid sequence, check SD status flag
+                sd_connected = True
+                sd_status = "ONLINE"
+                sd_msg = "VSPI bus mounted, circular CSV offline logging ready."
+                sd_fix = None
 
         # Overall Station State
         if not is_station_alive:

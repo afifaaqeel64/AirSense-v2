@@ -62,6 +62,7 @@ class ESP32IngestPayload(BaseModel):
     rain_flag: Optional[bool] = None
     firmware_version: str = Field("1.0.0")
     sequence_number: Optional[int] = None
+    sensor_health: Optional[Dict[str, Any]] = None
 
     # Alternative / Legacy fields
     device_id: Optional[str] = None
@@ -372,8 +373,9 @@ async def get_sensor_diagnostic_status(
     latest_reading = res.scalar_one_or_none()
 
     if not latest_reading:
-        return SensorHealthEngine.evaluate_sensor_connectivity(None, None)
+        return SensorHealthEngine.evaluate_sensor_connectivity(None, None, offline_threshold_seconds=35)
 
+    raw_json = latest_reading.payload_json if isinstance(latest_reading.payload_json, dict) else {}
     reading_dict = {
         "pm1": latest_reading.pm1,
         "pm2_5": latest_reading.pm2_5,
@@ -382,6 +384,7 @@ async def get_sensor_diagnostic_status(
         "humidity_pct": latest_reading.humidity_pct,
         "pressure_hpa": latest_reading.pressure_hpa,
         "rain_flag": latest_reading.rain_flag,
+        "sensor_health": raw_json.get("sensor_health"),
         "station_code": "BIC-KHI-ROOF-01",
         "device_uid": "AIRSENSE-NODE-KHI-01"
     }
@@ -389,5 +392,5 @@ async def get_sensor_diagnostic_status(
     return SensorHealthEngine.evaluate_sensor_connectivity(
         latest_reading=reading_dict,
         last_received_at=latest_reading.received_at,
-        offline_threshold_seconds=15
+        offline_threshold_seconds=35
     )

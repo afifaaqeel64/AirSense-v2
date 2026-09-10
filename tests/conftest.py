@@ -1,9 +1,18 @@
 """AirSense-v2 Pytest Shared Fixtures and Test Harness Utilities."""
 
+import os
 import time
 import pytest
 from typing import Dict, Any, List, Generator
 import paho.mqtt.client as mqtt
+
+# Preserve any live/production DATABASE_URL for live integration tests before isolation
+if os.environ.get("DATABASE_URL") and not os.environ.get("SAVED_DATABASE_URL"):
+    os.environ["SAVED_DATABASE_URL"] = os.environ["DATABASE_URL"]
+
+# Ensure regression test suite runs safely against isolated SQLite and doesn't wipe live production Supabase
+if not os.environ.get("USE_LIVE_DB_FOR_TESTS"):
+    os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///./data/airsense.db"
 
 
 @pytest.fixture

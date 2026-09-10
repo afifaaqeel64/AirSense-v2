@@ -918,6 +918,18 @@
 
     // 1-second countdown interval driving the 60-second minute cadence
     setInterval(tickCadenceTimer, 1000);
+
+    // Immediate refresh whenever tab is focused or user returns from background
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        countdownSeconds = 60;
+        fetchMinuteTelemetry(true, false);
+      }
+    });
+    window.addEventListener('focus', () => {
+      countdownSeconds = 60;
+      fetchMinuteTelemetry(true, false);
+    });
   </script>
 </body>
 </html>

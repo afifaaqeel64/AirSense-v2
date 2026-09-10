@@ -42,8 +42,12 @@ class BackupService:
 
     @classmethod
     def get_backup_directory(cls) -> Path:
-        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        return BACKUP_DIR
+        if os.environ.get("VERCEL") or not os.access(str(BASE_DIR), os.W_OK):
+            backup_dir = Path("/tmp/data/backups")
+        else:
+            backup_dir = BACKUP_DIR
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        return backup_dir
 
     @classmethod
     def create_sqlite_backup(
@@ -53,7 +57,12 @@ class BackupService:
     ) -> Dict[str, Any]:
         """Creates an atomic online snapshot of the SQLite database with gzip compression and SHA-256 checksum."""
         backup_dir = cls.get_backup_directory()
-        src = source_db_path or (DATA_DIR / "airsense.db")
+        if source_db_path:
+            src = source_db_path
+        elif os.environ.get("VERCEL"):
+            src = Path("/tmp/data/airsense.db")
+        else:
+            src = DATA_DIR / "airsense.db"
 
         if not src.exists():
             return {

@@ -13,23 +13,37 @@ Features:
 - Dual parser: structured JSON line parser ([JSON_TELEMETRY] {...}) with fallback regex parser.
 """
 
+import os
 import sys
 import time
 import re
 import json
 import random
+import argparse
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 import serial
 import serial.tools.list_ports
 import paho.mqtt.client as mqtt
 
-# Configuration
-API_ENDPOINT = "http://127.0.0.1:8000/api/v1/ingest/reading"
+# Configuration & Dual-Routing Target Endpoints
+AIRSENSE_LOCAL_API_URL = os.getenv("AIRSENSE_LOCAL_API_URL", "http://127.0.0.1:8000/api/v1/ingest/reading")
+AIRSENSE_CLOUD_API_URL = os.getenv("AIRSENSE_CLOUD_API_URL", "https://airsense-team.vercel.app/api/v1/ingest/reading")
+AIRSENSE_DEVICE_TOKEN = os.getenv("AIRSENSE_DEVICE_TOKEN", "airsense_dev_token_khi_01")
+
+# Backward-compatible endpoint constants
+API_ENDPOINT = AIRSENSE_LOCAL_API_URL
+LOCAL_API_ENDPOINT = AIRSENSE_LOCAL_API_URL
+CLOUD_API_ENDPOINT = AIRSENSE_CLOUD_API_URL
+
 HEADERS = {
     "Content-Type": "application/json",
-    "X-Device-Token": "airsense_dev_token_khi_01"
+    "X-Device-Token": AIRSENSE_DEVICE_TOKEN
 }
+
+# Dedicated ThreadPoolExecutor for non-blocking concurrent HTTP dispatch
+http_pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="AirSense-HttpPush")
 
 MQTT_TOPIC_PRIMARY = "airsense/karachi/bic_roof/telemetry"
 MQTT_TOPIC_FALLBACK = "airsense/telemetry"
@@ -156,20 +170,52 @@ def find_esp32_port(preferred_port=None):
     return available[0]
 
 
-def push_to_local_api(payload):
-    """Pushes telemetry to local FastAPI ingestion endpoint with fast timeout."""
-    try:
-        req = urllib.request.Request(
-            API_ENDPOINT,
-            data=json.dumps(payload).encode('utf-8'),
-            headers=HEADERS,
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=2.0) as resp:
-            return resp.status in (200, 201)
-    except Exception:
-        # Suppress local API errors if local backend server is not running
+def push_to_endpoint(url: str, payload: dict, label: str = "HTTP", timeout: float = 2.5) -> bool:
+    """Dispatches payload to a specific HTTP/HTTPS endpoint with strict timeout and isolated error handling."""
+    if not url:
         return False
+    try:
+        data_bytes = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data_bytes, headers=HEADERS, method="POST")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status in (200, 201):
+                return True
+            else:
+                print(f"[{label} WARN] Unexpected HTTP {resp.status} from {url}")
+                return False
+    except urllib.error.HTTPError as he:
+        print(f"[{label} HTTP ERROR] {he.code} {he.reason} -> {url}")
+        return False
+    except Exception:
+        # Non-fatal: do not crash bridge if target is offline, DNS times out, or network drops
+        return False
+
+
+def push_to_local_api(payload: dict) -> bool:
+    """Pushes telemetry to local FastAPI ingestion endpoint with fast timeout (backward-compatible)."""
+    return push_to_endpoint(API_ENDPOINT, payload, label="LOCAL INGEST", timeout=2.5)
+
+
+_UNSET = object()
+
+
+def push_telemetry_dual_async(payload: dict, local_url: str = _UNSET, cloud_url: str = _UNSET) -> list:
+    """Submits dual HTTP ingestion tasks to background ThreadPoolExecutor, preventing serial loop blocking."""
+    target_local = AIRSENSE_LOCAL_API_URL if local_url is _UNSET else local_url
+    target_cloud = AIRSENSE_CLOUD_API_URL if cloud_url is _UNSET else cloud_url
+    futures = []
+
+    # 1. Local backend dispatch
+    if target_local:
+        fut_local = http_pool.submit(push_to_endpoint, target_local, payload, "LOCAL INGEST", 2.5)
+        futures.append(fut_local)
+
+    # 2. Live Cloud HTTPS backend dispatch
+    if target_cloud:
+        fut_cloud = http_pool.submit(push_to_endpoint, target_cloud, payload, "CLOUD INGEST", 2.5)
+        futures.append(fut_cloud)
+
+    return futures
 
 
 def build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas=None, sensor_health=None, rain_adc=None):
@@ -188,7 +234,7 @@ def build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas=No
     if hum is not None:
         try:
             h_val = float(hum)
-            if h_val < 0.0 or h_val > 100.0 or (temp is None and h_val == 0.0):
+            if h_val < 0.0 or h_val > 100.0:
                 hum = None
             else:
                 hum = round(h_val, 1)
@@ -198,14 +244,15 @@ def build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas=No
     if press is not None:
         try:
             p_val = float(press)
-            if p_val < 300.0 or p_val > 1200.0 or (temp is None and p_val > 1150.0):
+            # Preserve valid 0.0 values; otherwise enforce physical bounds [300, 1200]
+            if p_val != 0.0 and (p_val < 300.0 or p_val > 1200.0 or (temp is None and p_val > 1150.0)):
                 press = None
             else:
                 press = round(p_val, 1)
         except (ValueError, TypeError):
             press = None
 
-    # Sanitize PMS7003 particle values
+    # Sanitize PMS7003 particle values (preserving exact 0.0 and using nominal 9.0/7.0/10.0 fallbacks)
     pms_ok = False
     if pm25 is not None:
         try:
@@ -215,13 +262,35 @@ def build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas=No
                 pms_ok = True
             else:
                 pm25 = min(max(round(p25_val, 1), 0.0), 1000.0)
+                pms_ok = True
         except (ValueError, TypeError):
-            pm25 = 15.0
+            pm25 = 9.0
     else:
-        pm25 = 15.0
+        pm25 = 9.0
 
-    pm1 = round(float(pm1), 1) if pm1 is not None else round(pm25 * 0.75, 1)
-    pm10 = round(float(pm10), 1) if pm10 is not None else round(pm25 * 1.25, 1)
+    if pm1 is not None:
+        try:
+            p1_val = float(pm1)
+            if 0.0 <= p1_val <= 1000.0:
+                pm1 = round(p1_val, 1)
+            else:
+                pm1 = min(max(round(p1_val, 1), 0.0), 1000.0)
+        except (ValueError, TypeError):
+            pm1 = 7.0
+    else:
+        pm1 = 7.0
+
+    if pm10 is not None:
+        try:
+            p10_val = float(pm10)
+            if 0.0 <= p10_val <= 1500.0:
+                pm10 = round(p10_val, 1)
+            else:
+                pm10 = min(max(round(p10_val, 1), 0.0), 1500.0)
+        except (ValueError, TypeError):
+            pm10 = 10.0
+    else:
+        pm10 = 10.0
 
     # Check if BME280 is stuck on static emergency fallback constants or missing
     is_bme_fallback = (temp is not None and round(float(temp), 1) == 29.5 and 
@@ -243,6 +312,13 @@ def build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas=No
     if isinstance(computed_health, dict) and is_bme_fallback:
         computed_health["bme280"] = "DEGRADED_FROZEN"
 
+    gas_val = None
+    if gas is not None:
+        try:
+            gas_val = round(float(gas), 2)
+        except (ValueError, TypeError):
+            gas_val = None
+
     return {
         "schema_version": "1.0",
         "device_uid": "AIRSENSE-NODE-KHI-01",
@@ -257,7 +333,7 @@ def build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas=No
         "temperature": temp if temp is not None else 29.5,
         "humidity": hum if hum is not None else 65.0,
         "pressure": press if press is not None else 1012.0,
-        "gas_resistance_kohm": round(float(gas), 2) if gas is not None else None,
+        "gas_resistance_kohm": gas_val,
         "rain_flag": bool(rain),
         "rain_adc": int(rain_adc) if rain_adc is not None else None,
         "sensor_health": computed_health,
@@ -288,17 +364,17 @@ def parse_serial_line(line, current_data):
             if isinstance(parsed, dict) and any(k in parsed for k in ("device_uid", "pm2_5", "pm25", "temperature", "sequence_number")):
                 # Extract and normalize
                 seq = parsed.get("sequence_number", 1)
-                pm1 = parsed.get("pm1", parsed.get("pm1_0"))
-                pm25 = parsed.get("pm2_5", parsed.get("pm25"))
+                pm1 = parsed.get("pm1") if ("pm1" in parsed and parsed.get("pm1") is not None) else parsed.get("pm1_0")
+                pm25 = parsed.get("pm2_5") if ("pm2_5" in parsed and parsed.get("pm2_5") is not None) else parsed.get("pm25")
                 pm10 = parsed.get("pm10")
-                temp = parsed.get("temperature", parsed.get("temperature_c"))
-                hum = parsed.get("humidity", parsed.get("humidity_pct"))
-                press = parsed.get("pressure", parsed.get("pressure_hpa"))
+                temp = parsed.get("temperature") if ("temperature" in parsed and parsed.get("temperature") is not None) else parsed.get("temperature_c")
+                hum = parsed.get("humidity") if ("humidity" in parsed and parsed.get("humidity") is not None) else parsed.get("humidity_pct")
+                press = parsed.get("pressure") if ("pressure" in parsed and parsed.get("pressure") is not None) else parsed.get("pressure_hpa")
                 rain = parsed.get("rain_flag", False)
-                gas = parsed.get("gas_resistance_kohm", parsed.get("gas_resistance"))
+                gas = parsed.get("gas_resistance_kohm") if ("gas_resistance_kohm" in parsed and parsed.get("gas_resistance_kohm") is not None) else parsed.get("gas_resistance")
                 health = parsed.get("sensor_health")
-                
-                payload = build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas, health)
+                rain_adc = parsed.get("rain_adc")
+                payload = build_telemetry_payload(seq, pm1, pm25, pm10, temp, hum, press, rain, gas, health, rain_adc=rain_adc)
                 return payload, True
         except json.JSONDecodeError:
             pass
@@ -330,8 +406,8 @@ def parse_serial_line(line, current_data):
         t = float(m_bme.group(1))
         h = float(m_bme.group(2))
         p = float(m_bme.group(3))
-        # Filter out hardware I2C error states (-148.5C, 0% hum, 1179.7 hPa)
-        if -40.0 <= t <= 85.0 and t != -148.5 and 0.0 <= h <= 100.0 and 300.0 <= p <= 1200.0:
+        # Filter out hardware I2C error states (-148.5C, 0% hum, 1179.7 hPa), but preserve valid 0.0
+        if -40.0 <= t <= 85.0 and t != -148.5 and 0.0 <= h <= 100.0 and (p == 0.0 or 300.0 <= p <= 1200.0):
             current_data["temp"] = t
             current_data["hum"] = h
             current_data["press"] = p
@@ -369,15 +445,76 @@ def parse_serial_line(line, current_data):
     return None, is_cycle_end
 
 
-def run_bridge(preferred_port=None, baudrate=115200):
-    """Main daemon runner with infinite auto-recovery loop, dynamic COM scanning, and dual MQTT publishing."""
+def run_simulation_mode(cloud_url: str = None, local_url: str = None, wait_for_completion: bool = True) -> dict:
+    """Emits a genuine synthetic telemetry reading through the dual-dispatch pipeline for automated verification."""
+    target_local = local_url or AIRSENSE_LOCAL_API_URL
+    target_cloud = cloud_url or AIRSENSE_CLOUD_API_URL
+
+    print("=" * 70)
+    print("  AirSense Pakistan: Telemetry Simulation Mode  ")
+    print("=" * 70)
+    print(f"Local API URL:  {target_local or 'DISABLED'}")
+    print(f"Cloud API URL:  {target_cloud or 'NONE CONFIGURED'}")
+    print("=" * 70)
+
+    # Generate a realistic synthetic reading conforming to production schema
+    synthetic_payload = build_telemetry_payload(
+        seq=random.randint(100, 999),
+        pm1=7.8,
+        pm25=14.5,
+        pm10=22.3,
+        temp=28.4,
+        hum=58.5,
+        press=1012.3,
+        rain=False,
+        gas=48.6,
+        sensor_health={"pms7003": "OK", "bme280": "OK", "rain": "OK", "microsd": "OK"}
+    )
+    synthetic_payload["transmission_mode"] = "SERIAL_BRIDGE_SIMULATE"
+
+    print(f"[SIMULATE] Emitting synthetic telemetry packet #{synthetic_payload['sequence_number']}: "
+          f"PM2.5={synthetic_payload['pm2_5']} ug/m3 | Temp={synthetic_payload['temperature']}C | "
+          f"Hum={synthetic_payload['humidity']}% | Rain={synthetic_payload['rain_flag']}")
+
+    # 1. Publish to MQTT brokers
+    try:
+        mqtt_publisher = DualBrokerMqttPublisher()
+        mqtt_publisher.publish(synthetic_payload)
+        print("[SIMULATE] MQTT dual-publish submitted.")
+    except Exception as e:
+        print(f"[SIMULATE WARN] MQTT publish encountered: {e}")
+
+    # 2. Dispatch via non-blocking dual HTTP pipeline
+    futures = push_telemetry_dual_async(synthetic_payload, local_url=target_local, cloud_url=target_cloud)
+    print(f"[SIMULATE] Submitted {len(futures)} HTTP dispatch task(s) to background ThreadPoolExecutor.")
+
+    if wait_for_completion and futures:
+        print("[SIMULATE] Awaiting HTTP dispatch completion (timeout 3.0s)...")
+        for idx, fut in enumerate(futures):
+            try:
+                res = fut.result(timeout=3.0)
+                status_str = "SUCCESS (HTTP 200/201)" if res else "FAILED/UNREACHABLE"
+                print(f"[SIMULATE] Dispatch Task #{idx+1} result: {status_str}")
+            except Exception as ex:
+                print(f"[SIMULATE] Dispatch Task #{idx+1} error: {ex}")
+
+    print("[SIMULATE] Synthetic telemetry simulation complete.")
+    return synthetic_payload
+
+
+def run_bridge(preferred_port=None, baudrate=115200, cloud_url=None, local_url=None):
+    """Main daemon runner with infinite auto-recovery loop, dynamic COM scanning, and dual HTTP/MQTT publishing."""
+    target_local = local_url or AIRSENSE_LOCAL_API_URL
+    target_cloud = cloud_url or AIRSENSE_CLOUD_API_URL
+
     print("=" * 70)
     print("  AirSense Pakistan: USB Serial Live Bridge & Dual MQTT Daemon  ")
     print("=" * 70)
     print(f"Preferred Port: {preferred_port or 'AUTO-DETECT'}")
     print(f"Baud Rate:      {baudrate}")
     print(f"MQTT Brokers:   HiveMQ (broker.hivemq.com) & EMQX (broker.emqx.io)")
-    print(f"Local API:      {API_ENDPOINT}")
+    print(f"Local API:      {target_local or 'DISABLED'}")
+    print(f"Cloud API:      {target_cloud or 'NONE (Local Only)'}")
     print("=" * 70)
 
     # Initialize Dual Broker MQTT Engine
@@ -408,6 +545,11 @@ def run_bridge(preferred_port=None, baudrate=115200):
 
             print(f"[BRIDGE ATTEMPT] Connecting to serial port {current_port} at {baudrate} baud...")
             ser = serial.Serial(current_port, baudrate=baudrate, timeout=2.0)
+            try:
+                ser.dtr = False
+                ser.rts = False
+            except Exception:
+                pass
             print(f"\n[BRIDGE SUCCESS] Connected to {current_port}! Streaming live hardware telemetry...")
             backoff = 1.0  # Reset backoff on successful connection
 
@@ -428,7 +570,7 @@ def run_bridge(preferred_port=None, baudrate=115200):
                 if payload:
                     # Direct structured JSON packet received
                     mqtt_publisher.publish(payload)
-                    push_to_local_api(payload)
+                    push_telemetry_dual_async(payload, local_url=target_local, cloud_url=target_cloud)
                     print(f"[DASHBOARD LIVE] Pushed JSON Packet #{payload['sequence_number']} -> PM2.5={payload['pm2_5']} ug/m3 | Temp={payload['temperature']}C | Hum={payload['humidity']}% | Rain={payload['rain_flag']} | Status: OK")
                     seq = payload['sequence_number'] + 1
                     last_push_time = now_t
@@ -444,7 +586,7 @@ def run_bridge(preferred_port=None, baudrate=115200):
                         rain_adc=current_data.get("rain_adc")
                     )
                     mqtt_publisher.publish(payload)
-                    push_to_local_api(payload)
+                    push_telemetry_dual_async(payload, local_url=target_local, cloud_url=target_cloud)
                     print(f"[DASHBOARD LIVE] Pushed Cycle #{seq} -> PM2.5={payload['pm2_5']} ug/m3 | Temp={payload['temperature']}C | Hum={payload['humidity']}% | Rain={payload['rain_flag']} | Status: OK")
                     seq += 1
 
@@ -482,13 +624,29 @@ def run_bridge(preferred_port=None, baudrate=115200):
 
 
 if __name__ == "__main__":
-    cli_port = None
-    if len(sys.argv) > 1 and sys.argv[1].strip():
-        arg = sys.argv[1].strip()
-        if arg.upper() not in ("AUTO", "DEFAULT"):
-            cli_port = arg
+    parser = argparse.ArgumentParser(description="AirSense USB Serial Live Bridge & Dual-Routing Daemon")
+    parser.add_argument("port", nargs="?", default="AUTO", help="COM port (e.g. COM3, AUTO, or SIMULATE)")
+    parser.add_argument("--cloud-url", default=os.getenv("AIRSENSE_CLOUD_API_URL"), help="Public Cloud Ingestion Endpoint")
+    parser.add_argument("--local-url", default=os.getenv("AIRSENSE_LOCAL_API_URL", AIRSENSE_LOCAL_API_URL), help="Local Ingestion Endpoint")
+    parser.add_argument("--simulate", action="store_true", help="Emit synthetic telemetry packet for automated verification")
+    parser.add_argument("--baudrate", type=int, default=115200, help="Serial baud rate")
+    args = parser.parse_args()
 
-    try:
-        run_bridge(cli_port)
-    except KeyboardInterrupt:
-        print("\n[AirSense] Daemon exited cleanly.")
+    port_arg = args.port.strip() if args.port else "AUTO"
+    is_simulation = args.simulate or port_arg.upper() in ("SIMULATE", "--SIMULATE")
+
+    if is_simulation:
+        run_simulation_mode(cloud_url=args.cloud_url, local_url=args.local_url)
+    else:
+        cli_port = None
+        if port_arg.upper() not in ("AUTO", "DEFAULT", "NONE", ""):
+            cli_port = port_arg
+        try:
+            run_bridge(
+                preferred_port=cli_port,
+                baudrate=args.baudrate,
+                cloud_url=args.cloud_url,
+                local_url=args.local_url
+            )
+        except KeyboardInterrupt:
+            print("\n[AirSense] Daemon exited cleanly.")

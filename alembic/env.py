@@ -8,6 +8,7 @@ from alembic import context
 
 from apps.api.core.config import settings
 from apps.api.db.models import Base
+from apps.api.db.session import normalize_database_url
 
 config = context.config
 
@@ -18,7 +19,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    url = settings.DATABASE_URL.replace("+asyncpg", "").replace("+aiosqlite", "")
+    url = normalize_database_url(settings.DATABASE_URL).replace("+asyncpg", "").replace("+aiosqlite", "")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -39,9 +40,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 async def run_async_migrations() -> None:
     configuration = config.get_section(config.config_ini_section, {})
-    url = settings.DATABASE_URL
-    if "sqlite" in url and "+aiosqlite" not in url:
-        url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+    url = normalize_database_url(settings.DATABASE_URL)
     configuration["sqlalchemy.url"] = url
 
     connectable = async_engine_from_config(

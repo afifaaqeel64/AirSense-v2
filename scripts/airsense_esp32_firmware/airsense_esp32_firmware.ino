@@ -1,6 +1,6 @@
 /*
   =============================================================================
-  AirSense Pakistan: Zero-Dependency Hardened Production ESP32 Firmware
+  AirSense Pakistan: Autonomous Zero-Dependency Production ESP32 Firmware
   =============================================================================
   Hardware Target: ESP32 Dev Module (WROOM-32 / ESP32-D0WDQ6)
   Features:
@@ -11,10 +11,14 @@
     - Structured [JSON_TELEMETRY] Serial Streaming for Python Bridge
     - Transparent Sensor Error / Health Status Reporting (Zero Fake Data)
     - Non-Blocking Wi-Fi Reconnection & Dual-Broker Cloud MQTT Failover
+    - Dynamic Wi-Fi Configuration via WiFiManager (Captive Portal)
+    - Direct Secure HTTPS Cloud Ingestion to Vercel
   =============================================================================
 */
 
 #include <WiFi.h>
+#include <WiFiManager.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -22,20 +26,17 @@
 #include <time.h>
 
 // =============================================================================
-// 1. WI-FI & DEVICE IDENTIFICATION CONFIGURATION
+// 1. DEVICE IDENTIFICATION CONFIGURATION
 // =============================================================================
-const char* WIFI_SSID     = "Tracks_101";              // Local Wi-Fi / Hotspot SSID
-const char* WIFI_PASS     = "12344321";                // Local Wi-Fi Password
-
 const char* DEVICE_UID    = "AIRSENSE-NODE-KHI-01";    // Global Node UID
 const char* DEVICE_ID     = "AIRSENSE-NODE-KHI-01";    // Standard Schema Device ID
 const char* STATION_CODE  = "BIC-KHI-ROOF-01";         // Station Code
 const char* CAMPUS_CODE   = "KARACHI";                 // Campus Code
 const char* LOCATION      = "BIC_ROOF_KARACHI";        // Physical Location
-const char* FIRMWARE_VER  = "v3.5.0-HARDENED";         // Hardened Firmware Version
+const char* FIRMWARE_VER  = "v4.0.0-AUTONOMOUS";       // Autonomous Firmware Version
 
-// Local Workstation Backend Ingestion (Optional Fallback)
-const char* API_ENDPOINT  = "http://172.20.10.13:8000/api/v1/ingest/reading";
+// Live Cloud Backend Ingestion (Direct HTTPS)
+const char* API_ENDPOINT  = "https://airsense-team.vercel.app/api/v1/ingest/reading";
 const char* DEVICE_TOKEN  = "airsense_dev_token_khi_01";
 
 // =============================================================================
@@ -76,6 +77,7 @@ struct BME280Calib {
 
 uint8_t       bme_addr         = 0x76;
 bool          bme_found        = false;
+bool          is_bmp280        = false;
 bool          sd_found         = false;
 unsigned long last_sample_time = 0;
 unsigned long packet_seq       = 0;
@@ -83,7 +85,7 @@ unsigned long packet_seq       = 0;
 uint8_t read8(uint8_t reg) {
   Wire.beginTransmission(bme_addr);
   Wire.write(reg);
-  Wire.endTransmission();
+  Wire.endTransmission(false); // Repeated Start
   Wire.requestFrom(bme_addr, (uint8_t)1);
   return Wire.available() ? Wire.read() : 0;
 }
@@ -91,7 +93,7 @@ uint8_t read8(uint8_t reg) {
 uint16_t read16_LE(uint8_t reg) {
   Wire.beginTransmission(bme_addr);
   Wire.write(reg);
-  Wire.endTransmission();
+  Wire.endTransmission(false); // Repeated Start
   Wire.requestFrom(bme_addr, (uint8_t)2);
   if (Wire.available() >= 2) {
     return (Wire.read() | (Wire.read() << 8));
@@ -111,16 +113,24 @@ void write8(uint8_t reg, uint8_t val) {
 }
 
 bool initBME280() {
-  Wire.begin(BME_SDA_PIN, BME_SCL_PIN);
+  Wire.setTimeOut(50);
+  Wire.setClock(100000);
   bme_addr = 0x76;
   uint8_t id = read8(0xD0);
-  if (id != 0x60) {
+  if (id != 0x60 && id != 0x58 && id != 0x56 && id != 0x57) {
     bme_addr = 0x77;
     id = read8(0xD0);
-    if (id != 0x60) return false;
+    if (id != 0x60 && id != 0x58 && id != 0x56 && id != 0x57) return false;
+  }
+  
+  is_bmp280 = (id == 0x58 || id == 0x56 || id == 0x57);
+  if (is_bmp280) {
+    Serial.printf("[INIT] Detected Bosch BMP280 (ID: 0x%02X) on I2C (0x%02X). Temperature & Pressure active.\n", id, bme_addr);
+  } else {
+    Serial.printf("[INIT] Detected Bosch BME280 (ID: 0x%02X) on I2C (0x%02X). Temp, Humidity & Pressure active.\n", id, bme_addr);
   }
 
-  // Read calibration coefficients
+  // Read Temperature & Pressure calibration coefficients (common to both BME280 and BMP280)
   bmeCalib.dig_T1 = read16_LE(0x88);
   bmeCalib.dig_T2 = readS16_LE(0x8A);
   bmeCalib.dig_T3 = readS16_LE(0x8C);
@@ -133,14 +143,19 @@ bool initBME280() {
   bmeCalib.dig_P7 = readS16_LE(0x9A);
   bmeCalib.dig_P8 = readS16_LE(0x9C);
   bmeCalib.dig_P9 = readS16_LE(0x9E);
-  bmeCalib.dig_H1 = read8(0xA1);
-  bmeCalib.dig_H2 = readS16_LE(0xE1);
-  bmeCalib.dig_H3 = read8(0xE3);
-  bmeCalib.dig_H4 = (read8(0xE4) << 4) | (read8(0xE5) & 0x0F);
-  bmeCalib.dig_H5 = (read8(0xE6) << 4) | (read8(0xE5) >> 4);
-  bmeCalib.dig_H6 = (int8_t)read8(0xE7);
 
-  write8(0xF2, 0x01); // Humidity oversampling x1
+  if (!is_bmp280) {
+    // Read Humidity calibration coefficients (BME280 only)
+    bmeCalib.dig_H1 = read8(0xA1);
+    bmeCalib.dig_H2 = readS16_LE(0xE1);
+    bmeCalib.dig_H3 = read8(0xE3);
+    bmeCalib.dig_H4 = (read8(0xE4) << 4) | (read8(0xE5) & 0x0F);
+    bmeCalib.dig_H5 = (read8(0xE6) << 4) | (read8(0xE5) >> 4);
+    bmeCalib.dig_H6 = (int8_t)read8(0xE7);
+
+    write8(0xF2, 0x01); // Humidity oversampling x1
+  }
+
   write8(0xF4, 0x27); // Pressure x1, Temp x1, Normal mode
   write8(0xF5, 0xA0); // Standby 1000ms, Filter off
   return true;
@@ -163,7 +178,7 @@ bool readBME280(float &temp, float &hum, float &press) {
 
   Wire.beginTransmission(bme_addr);
   Wire.write(0xF7);
-  if (Wire.endTransmission() != 0) {
+  if (Wire.endTransmission(false) != 0) { // Repeated Start
     bme_found = false;
     temp  = -999.0;
     hum   = -1.0;
@@ -171,8 +186,9 @@ bool readBME280(float &temp, float &hum, float &press) {
     return false;
   }
 
-  uint8_t bytesRead = Wire.requestFrom(bme_addr, (uint8_t)8);
-  if (bytesRead < 8) {
+  uint8_t req_bytes = is_bmp280 ? 6 : 8;
+  uint8_t bytesRead = Wire.requestFrom(bme_addr, req_bytes);
+  if (bytesRead < req_bytes) {
     bme_found = false;
     temp  = -999.0;
     hum   = -1.0;
@@ -182,7 +198,10 @@ bool readBME280(float &temp, float &hum, float &press) {
 
   int32_t adc_P = ((int32_t)Wire.read() << 12) | ((int32_t)Wire.read() << 4) | ((int32_t)Wire.read() >> 4);
   int32_t adc_T = ((int32_t)Wire.read() << 12) | ((int32_t)Wire.read() << 4) | ((int32_t)Wire.read() >> 4);
-  int32_t adc_H = ((int32_t)Wire.read() << 8) | (int32_t)Wire.read();
+  int32_t adc_H = 0;
+  if (!is_bmp280) {
+    adc_H = ((int32_t)Wire.read() << 8) | (int32_t)Wire.read();
+  }
 
   // Validate that ADC values are not all-zeros or all-ones (I2C communication fault)
   if (adc_T == 0 || adc_T == 0x7FFFF || (uint32_t)adc_T == 0xFFFFF || adc_P == 0) {
@@ -217,19 +236,26 @@ bool readBME280(float &temp, float &hum, float &press) {
     press = (float)(((p + p1 + p2) >> 8) + (((int64_t)bmeCalib.dig_P7) << 4)) / 25600.0;
   }
 
-  // Compensate Humidity
-  int32_t v_x1_u32r = (bmeCalib.t_fine - ((int32_t)76800));
-  v_x1_u32r = (((((adc_H << 14) - (((int32_t)bmeCalib.dig_H4) << 20) - (((int32_t)bmeCalib.dig_H5) * v_x1_u32r)) +
-                 ((int32_t)16384)) >> 15) * (((((((v_x1_u32r * ((int32_t)bmeCalib.dig_H6)) >> 10) *
-                 (((v_x1_u32r * ((int32_t)bmeCalib.dig_H3)) >> 11) + ((int32_t)32768))) >> 10) +
-                 ((int32_t)2097152)) * ((int32_t)bmeCalib.dig_H2) + 8192) >> 14));
-  v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * ((int32_t)bmeCalib.dig_H1)) >> 4));
-  v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
-  v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
-  hum = (float)(v_x1_u32r >> 12) / 1024.0;
+  // Compensate Humidity (BME280 only)
+  if (is_bmp280) {
+    hum = -1.0; // BMP280 does not have a humidity channel
+  } else {
+    int32_t v_x1_u32r = (bmeCalib.t_fine - ((int32_t)76800));
+    v_x1_u32r = (((((adc_H << 14) - (((int32_t)bmeCalib.dig_H4) << 20) - (((int32_t)bmeCalib.dig_H5) * v_x1_u32r)) +
+                   ((int32_t)16384)) >> 15) * (((((((v_x1_u32r * ((int32_t)bmeCalib.dig_H6)) >> 10) *
+                   (((v_x1_u32r * ((int32_t)bmeCalib.dig_H3)) >> 11) + ((int32_t)32768))) >> 10) +
+                   ((int32_t)2097152)) * ((int32_t)bmeCalib.dig_H2) + 8192) >> 14));
+    v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * ((int32_t)bmeCalib.dig_H1)) >> 4));
+    v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
+    v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
+    hum = (float)(v_x1_u32r >> 12) / 1024.0;
+  }
 
   // Sanity check physical operational bounds
-  if (temp < -40.0 || temp > 85.0 || hum < 0.0 || hum > 100.0 || press < 300.0 || press > 1200.0) {
+  if (temp < -40.0 || temp > 85.0 || press < 300.0 || press > 1200.0) {
+    return false;
+  }
+  if (!is_bmp280 && (hum < 0.0 || hum > 100.0)) {
     return false;
   }
 
@@ -240,28 +266,63 @@ bool readBME280(float &temp, float &hum, float &press) {
 // 5. PLANTOWER PMS7003 LASER DUST SENSOR DRIVER
 // =============================================================================
 bool readPMS7003(float &pm1, float &pm25, float &pm10) {
+  // Flush stale bytes accumulated in UART RX buffer before reading fresh frame
+  if (pmsSerial.available() > 32) {
+    while (pmsSerial.available() > 0) {
+      pmsSerial.read();
+    }
+  }
+
   uint8_t buffer[32];
   unsigned long start = millis();
-  while (millis() - start < 500) {
-    if (pmsSerial.available() >= 32) {
-      if (pmsSerial.peek() == 0x42) {
-        pmsSerial.readBytes(buffer, 32);
-        if (buffer[0] == 0x42 && buffer[1] == 0x4D) {
-          uint16_t checksum = 0;
-          for (int i = 0; i < 30; i++) checksum += buffer[i];
-          uint16_t frame_checksum = (buffer[30] << 8) | buffer[31];
-          if (checksum == frame_checksum) {
-            pm1  = (float)((buffer[10] << 8) | buffer[11]); // Standard particle PM1.0
-            pm25 = (float)((buffer[12] << 8) | buffer[13]); // Standard particle PM2.5
-            pm10 = (float)((buffer[14] << 8) | buffer[15]); // Standard particle PM10
-            return true;
-          }
-        }
-      } else {
-        pmsSerial.read();
+  while (millis() - start < 2000) {
+    if (pmsSerial.available() > 0) {
+      if (pmsSerial.peek() != 0x42) {
+        pmsSerial.read(); // Discard noise until start character 0x42
+        continue;
       }
+
+      // Check second byte for 0x4D frame header
+      if (pmsSerial.available() < 2) {
+        delay(2);
+        continue;
+      }
+
+      pmsSerial.read(); // consume 0x42
+      if (pmsSerial.peek() != 0x4D) {
+        // Not 0x4D; 0x42 was a data byte. Slide window by 1 byte.
+        continue;
+      }
+      pmsSerial.read(); // consume 0x4D
+
+      buffer[0] = 0x42;
+      buffer[1] = 0x4D;
+
+      // Read remaining 30 bytes with 500ms frame timeout
+      int bytesRead = 2;
+      unsigned long frameStart = millis();
+      while (bytesRead < 32 && (millis() - frameStart < 500)) {
+        if (pmsSerial.available() > 0) {
+          buffer[bytesRead++] = pmsSerial.read();
+        } else {
+          delay(2);
+        }
+      }
+
+      if (bytesRead == 32) {
+        uint16_t checksum = 0;
+        for (int i = 0; i < 30; i++) checksum += buffer[i];
+        uint16_t frame_checksum = (buffer[30] << 8) | buffer[31];
+        if (checksum == frame_checksum) {
+          pm1  = (float)((buffer[10] << 8) | buffer[11]); // Standard particle PM1.0
+          pm25 = (float)((buffer[12] << 8) | buffer[13]); // Standard particle PM2.5
+          pm10 = (float)((buffer[14] << 8) | buffer[15]); // Standard particle PM10
+          return true;
+        }
+      }
+    } else {
+      delay(5);
     }
-    delay(5);
   }
   pm1  = -1.0;
   pm25 = -1.0;
@@ -300,8 +361,8 @@ bool connectMQTT() {
   const char* broker = MQTT_BROKERS[current_broker_idx];
   Serial.printf("[MQTT] Connecting to Cloud Broker %s:%d...\n", broker, MQTT_PORT);
 
-  // Fast non-blocking socket connect (500ms timeout)
-  if (!mqttClient.connect(broker, MQTT_PORT, 500)) {
+  // Fast non-blocking socket connect (2500ms timeout for cross-border cloud latency)
+  if (!mqttClient.connect(broker, MQTT_PORT, 2500)) {
     Serial.printf("[MQTT WARNING] Connection to broker %s failed. Switching broker index.\n", broker);
     mqttClient.stop();
     mqtt_is_connected = false;
@@ -326,9 +387,9 @@ bool connectMQTT() {
   mqttClient.write((uint8_t)(clientLen & 0xFF));
   mqttClient.write((const uint8_t*)clientId, clientLen);
 
-  // Fast non-blocking CONNACK check (max 250ms)
+  // Fast non-blocking CONNACK check (max 2500ms for cloud handshake latency)
   unsigned long t0 = millis();
-  while (mqttClient.available() < 4 && (millis() - t0 < 250)) {
+  while (mqttClient.available() < 4 && (millis() - t0 < 2500)) {
     delay(5);
   }
 
@@ -434,7 +495,7 @@ void handleWiFiReconnection(unsigned long now) {
       last_wifi_check = now;
       Serial.println("[WIFI WARNING] Wi-Fi link lost. Initiating non-blocking reconnection...");
       WiFi.disconnect();
-      WiFi.begin(WIFI_SSID, WIFI_PASS);
+      WiFi.reconnect(); // Uses saved NVS credentials from WiFiManager
       wifi_reconnecting = true;
       wifi_reconnect_started_at = now;
     }
@@ -448,7 +509,7 @@ void handleWiFiReconnection(unsigned long now) {
 }
 
 // =============================================================================
-// 9. SETUP & INITIALIZATION
+// 8. SETUP & INITIALIZATION
 // =============================================================================
 void setup() {
   Serial.begin(115200);
@@ -457,14 +518,50 @@ void setup() {
   delay(500);
 
   Serial.println("\n========================================================");
-  Serial.println("  AirSense Pakistan: Zero-Dependency ESP32 Node Booting  ");
+  Serial.println("  AirSense Pakistan: Autonomous ESP32 Node Booting  ");
   Serial.println("========================================================");
 
   // 1. Init PMS7003 UART2
   pmsSerial.begin(9600, SERIAL_8N1, PMS_RX_PIN, PMS_TX_PIN);
   Serial.println("[INIT] PMS7003 UART2 initialized on GPIO 16 (RX) / 17 (TX).");
 
-  // 2. Init Bosch BME280 I2C
+  // [I2C BUS RECOVERY] 9-Clock bus clearing sequence to unlock stuck slaves
+  pinMode(BME_SDA_PIN, INPUT_PULLUP);
+  pinMode(BME_SCL_PIN, OUTPUT);
+  for (int i = 0; i < 9; i++) {
+    if (digitalRead(BME_SDA_PIN) == HIGH) break;
+    digitalWrite(BME_SCL_PIN, HIGH); delayMicroseconds(10);
+    digitalWrite(BME_SCL_PIN, LOW);  delayMicroseconds(10);
+  }
+  // Generate manual I2C STOP condition to reset slave state machine
+  pinMode(BME_SDA_PIN, OUTPUT);
+  digitalWrite(BME_SDA_PIN, LOW);  delayMicroseconds(10);
+  digitalWrite(BME_SCL_PIN, HIGH); delayMicroseconds(10);
+  digitalWrite(BME_SDA_PIN, HIGH); delayMicroseconds(10);
+  pinMode(BME_SDA_PIN, INPUT_PULLUP);
+  pinMode(BME_SCL_PIN, INPUT_PULLUP);
+
+  // [DIAGNOSTIC I2C SCANNER]
+  Serial.println("[I2C SCAN] Scanning I2C bus on SDA=21, SCL=22...");
+  Wire.begin(BME_SDA_PIN, BME_SCL_PIN);
+  Wire.setTimeOut(50);
+  Wire.setClock(100000);
+
+  int i2c_devices = 0;
+  for (byte address = 1; address < 127; address++) {
+    Wire.beginTransmission(address);
+    if (Wire.endTransmission() == 0) {
+      Serial.print("[I2C SCAN] FOUND DEVICE AT ADDRESS: 0x");
+      if (address < 16) Serial.print("0");
+      Serial.println(address, HEX);
+      i2c_devices++;
+    }
+  }
+  if (i2c_devices == 0) {
+    Serial.println("[I2C SCAN WARNING] No I2C devices found at all! The sensor is dead or wiring is completely wrong.");
+  }
+
+  // 2. Init Bosch BME280 / BMP280 I2C
   bme_found = initBME280();
   if (bme_found) {
     Serial.println("[INIT] Bosch BME280 initialized on I2C (0x76/0x77).");
@@ -480,31 +577,68 @@ void setup() {
     Serial.println("[INIT WARNING] MicroSD card not detected (CS->GPIO 5).");
   }
 
-  // 4. Initial Wi-Fi attempt (bounded 5s timeout)
-  Serial.print("[WIFI] Connecting to: ");
-  Serial.println(WIFI_SSID);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-
-  int tries = 0;
-  while (WiFi.status() != WL_CONNECTED && tries < 10) {
-    delay(500);
-    Serial.print(".");
-    tries++;
-  }
-
-  if (WiFi.status() == WL_CONNECTED) {
+  // 4. WiFiManager Setup (Dynamic configuration)
+  WiFiManager wm;
+  Serial.println("[WIFI] Starting WiFiManager Setup Portal (AirSense-Setup)...");
+  
+  // Set non-blocking timeout for config portal (180 seconds)
+  wm.setConfigPortalTimeout(180);
+  
+  bool res = wm.autoConnect("AirSense-Setup"); // Creates an open AP named AirSense-Setup
+  
+  if (!res) {
+    Serial.println("\n[WIFI WARNING] Config portal timed out (180s). Continuing in autonomous offline sensor mode.");
+    digitalWrite(STATUS_LED_PIN, LOW);
+  } else {
     Serial.println("\n[WIFI CONNECTED] IP: " + WiFi.localIP().toString());
     digitalWrite(STATUS_LED_PIN, HIGH);
     configTime(5 * 3600, 0, "pool.ntp.org", "time.google.com");
     Serial.println("[NTP] Internal clock synchronized with global atomic time (PKT UTC+5).");
-  } else {
-    Serial.println("\n[WIFI WARNING] Boot Wi-Fi offline. Background auto-reconnection active.");
   }
 }
 
 // =============================================================================
-// 10. MAIN LOOP & DATA ACQUISITION
+// 8.1 MICROSD DAILY DATE PARTITIONING & TIMESTAMPS
+// =============================================================================
+void logToMicroSD(unsigned long seq, const char* pm1_str, const char* pm25_str, const char* pm10_str,
+                  const char* temp_str, const char* hum_str, const char* press_str,
+                  bool rain_flag, const char* pms_health, const char* bme_health) {
+  if (!sd_found) return;
+
+  time_t now_epoch = time(NULL);
+  char filename[40] = "/telemetry.csv";
+  char dt_pkt[32] = "00:00:00";
+
+  if (now_epoch > 1700000000) {
+    struct tm timeinfo;
+    localtime_r(&now_epoch, &timeinfo);
+    snprintf(filename, sizeof(filename), "/airsense_%04d_%02d_%02d.csv",
+             timeinfo.tm_year + 1900, timeinfo.tm_mon + 1, timeinfo.tm_mday);
+    snprintf(dt_pkt, sizeof(dt_pkt), "%02d:%02d:%02d",
+             timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+  }
+
+  bool file_exists = SD.exists(filename);
+  File f = SD.open(filename, FILE_APPEND);
+  if (f) {
+    if (!file_exists || f.size() == 0) {
+      f.println("seq,epoch,datetime_pkt,pm1_0,pm2_5,pm10,temp_c,humidity_pct,pressure_hpa,rain_status,pms_health,bme_health");
+    }
+    const char* rain_status = rain_flag ? "WET" : "DRY";
+    f.printf("%lu,%lu,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+             seq,
+             (unsigned long)now_epoch,
+             dt_pkt,
+             pm1_str, pm25_str, pm10_str,
+             temp_str, hum_str, press_str,
+             rain_status,
+             pms_health, bme_health);
+    f.close();
+  }
+}
+
+// =============================================================================
+// 9. MAIN LOOP & DATA ACQUISITION
 // =============================================================================
 void loop() {
   unsigned long now = millis();
@@ -566,7 +700,11 @@ void loop() {
 
     if (bme_ok) {
       snprintf(temp_str, sizeof(temp_str), "%.1f", temp);
-      snprintf(hum_str, sizeof(hum_str), "%.1f", hum);
+      if (is_bmp280) {
+        snprintf(hum_str, sizeof(hum_str), "null");
+      } else {
+        snprintf(hum_str, sizeof(hum_str), "%.1f", hum);
+      }
       snprintf(press_str, sizeof(press_str), "%.1f", press);
     } else {
       snprintf(temp_str, sizeof(temp_str), "null");
@@ -579,20 +717,10 @@ void loop() {
     const char* rain_health = rain_ok ? "OK" : "ERROR";
     const char* sd_health   = sd_found ? "OK" : "ERROR";
 
-    // 4. Log to MicroSD Card CSV
-    if (sd_found) {
-      File f = SD.open("/telemetry.csv", FILE_APPEND);
-      if (f) {
-        f.printf("%lu,%s,%s,%s,%s,%s,%s,%d,%s,%s\n",
-          packet_seq,
-          pm1_str, pm25_str, pm10_str,
-          temp_str, hum_str, press_str,
-          rain_flag ? 1 : 0,
-          pms_health, bme_health
-        );
-        f.close();
-      }
-    }
+    // 4. Log to MicroSD Card CSV (Daily Date Partitioning & Timestamps)
+    logToMicroSD(packet_seq, pm1_str, pm25_str, pm10_str,
+                 temp_str, hum_str, press_str,
+                 rain_flag, pms_health, bme_health);
 
     // 5. Format Structured JSON Telemetry Payload
     char jsonPayload[640];
@@ -628,7 +756,7 @@ void loop() {
       (WiFi.status() == WL_CONNECTED) ? "WIFI_DIRECT" : "SERIAL_BRIDGE"
     );
 
-    // 6. Emit Structured JSON Telemetry over Serial for Python Bridge / Diagnostics
+    // 6. Emit Structured JSON Telemetry over Serial for Diagnostics
     Serial.print("[JSON_TELEMETRY] ");
     Serial.println(jsonPayload);
 
@@ -636,15 +764,21 @@ void loop() {
     if (WiFi.status() == WL_CONNECTED) {
       publishMQTT(MQTT_TOPIC, jsonPayload);
 
-      // 8. Optional Local HTTP Push (Fast non-blocking with 400ms timeout)
+      // 8. HTTPS Push directly to Vercel (Fast non-blocking)
+      WiFiClientSecure secureClient;
+      secureClient.setInsecure(); // Bypass cert verification for simplicity on ESP32
+
       HTTPClient http;
-      http.begin(API_ENDPOINT);
-      http.setTimeout(400);
+      http.begin(secureClient, API_ENDPOINT);
+      http.setTimeout(2500); // Allow slightly longer for SSL handshake
       http.addHeader("Content-Type", "application/json");
       http.addHeader("X-Device-Token", DEVICE_TOKEN);
+      
       int code = http.POST(jsonPayload);
       if (code > 0) {
-        Serial.printf("[HTTP PUSH] Success (HTTP %d)\n", code);
+        Serial.printf("[HTTPS VERCEL PUSH] Success (HTTP %d)\n", code);
+      } else {
+        Serial.printf("[HTTPS VERCEL PUSH] Failed, error: %s\n", http.errorToString(code).c_str());
       }
       http.end();
     }
@@ -652,8 +786,7 @@ void loop() {
     Serial.println("--------------------------------------------------------");
   }
 
-  // Non-blocking background Wi-Fi reconnection state machine
+  // Periodic non-blocking Wi-Fi reconnect check using NVS credentials
   handleWiFiReconnection(now);
-
   delay(20);
 }
