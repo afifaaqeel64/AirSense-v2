@@ -1086,11 +1086,13 @@
       const pressVal = (p.pressure !== undefined && p.pressure !== null) ? Number(p.pressure).toFixed(1) : (p.pressure_hpa !== undefined && p.pressure_hpa !== null ? Number(p.pressure_hpa).toFixed(1) : '--');
       const rainFlag = Boolean(p.rain_flag);
 
-      const timeStr = (p.timestamp_epoch && Number(p.timestamp_epoch) > 1700000000)
-        ? new Date(Number(p.timestamp_epoch) * 1000).toLocaleTimeString()
-        : new Date().toLocaleTimeString();
+      const timeMs = (p.timestamp_epoch && Number(p.timestamp_epoch) > 1700000000)
+        ? Number(p.timestamp_epoch) * 1000
+        : Date.now();
+      const timeStr = new Date(timeMs).toLocaleTimeString();
 
       const newRec = {
+        timeMs: timeMs,
         time: timeStr,
         source: 'ESP32 ON-SITE',
         pm1: pm1Val,
@@ -1102,10 +1104,13 @@
         rain: rainFlag,
         qc: 'VERIFIED RAW'
       };
-      savedTelemetryRecords.unshift(newRec);
-      if (savedTelemetryRecords.length > 120) savedTelemetryRecords.pop();
-      try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
-      renderTelemetryTable();
+      
+      if (!savedTelemetryRecords.some(r => Math.abs((r.timeMs || 0) - timeMs) < 5000)) {
+        savedTelemetryRecords.unshift(newRec);
+        if (savedTelemetryRecords.length > 120) savedTelemetryRecords.length = 120;
+        try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
+        renderTelemetryTable();
+      }
     }
 
     let hasHydratedTelemetry = false;
@@ -1113,39 +1118,42 @@
       const force = arguments.length > 0 && arguments[0] === true;
       if (hasHydratedTelemetry && !force) return;
       try {
-        const res = await fetch('/api/v1/hardware/minute-history?limit=120');
+        const res = await fetch(`/api/v1/hardware/minute-history?limit=120&_t=${Date.now()}`);
         if (!res.ok) return;
         const history = await res.json();
         if (Array.isArray(history) && history.length > 0) {
           const newRecords = history.map(r => {
-            const timeStr = r.timestamp_utc ? new Date(r.timestamp_utc).toLocaleTimeString() : new Date().toLocaleTimeString();
+            const timeMs = r.timestamp_utc ? new Date(r.timestamp_utc).getTime() : Date.now();
+            const timeStr = new Date(timeMs).toLocaleTimeString();
             return {
+              timeMs: timeMs,
               time: timeStr,
               timestamp_utc: r.timestamp_utc || null,
               source: r.station || 'ESP32 ON-SITE',
               pm1: (r.pm1 !== undefined && r.pm1 !== null) ? Number(r.pm1).toFixed(1) : '--',
-              pm25: (r.pm2_5 !== undefined && r.pm2_5 !== null) ? Number(r.pm2_5).toFixed(1) : (r.pm25 !== undefined ? Number(r.pm25).toFixed(1) : '--'),
+              pm25: (r.pm2_5 !== undefined && r.pm2_5 !== null) ? Number(r.pm2_5).toFixed(1) : (r.pm25 !== undefined && r.pm25 !== null ? Number(r.pm25).toFixed(1) : '--'),
               pm10: (r.pm10 !== undefined && r.pm10 !== null) ? Number(r.pm10).toFixed(1) : '--',
-              temp: (r.temperature_c !== undefined && r.temperature_c !== null) ? Number(r.temperature_c).toFixed(1) : (r.temp !== undefined ? Number(r.temp).toFixed(1) : '--'),
-              hum: (r.humidity_pct !== undefined && r.humidity_pct !== null) ? Number(r.humidity_pct).toFixed(1) : (r.hum !== undefined ? Number(r.hum).toFixed(1) : '--'),
-              press: (r.pressure_hpa !== undefined && r.pressure_hpa !== null) ? Number(r.pressure_hpa).toFixed(1) : (r.press !== undefined ? Number(r.press).toFixed(1) : '--'),
+              temp: (r.temperature_c !== undefined && r.temperature_c !== null) ? Number(r.temperature_c).toFixed(1) : (r.temp !== undefined && r.temp !== null ? Number(r.temp).toFixed(1) : '--'),
+              hum: (r.humidity_pct !== undefined && r.humidity_pct !== null) ? Number(r.humidity_pct).toFixed(1) : (r.hum !== undefined && r.hum !== null ? Number(r.hum).toFixed(1) : '--'),
+              press: (r.pressure_hpa !== undefined && r.pressure_hpa !== null) ? Number(r.pressure_hpa).toFixed(1) : (r.press !== undefined && r.press !== null ? Number(r.press).toFixed(1) : '--'),
               rain: r.rain_state === 'Wet' || Boolean(r.rain_flag || r.rain),
               qc: 'VERIFIED RAW'
             };
           });
 
-          // Merge without losing recent live packets
-          const seen = new Set();
+          // Merge by combining, sorting by time, and deduplicating
+          const all = [...savedTelemetryRecords, ...newRecords];
+          all.sort((a, b) => (b.timeMs || 0) - (a.timeMs || 0));
+
           const merged = [];
-          for (const item of [...savedTelemetryRecords, ...newRecords]) {
-            const key = item.timestamp_utc || (item.time + '-' + item.pm25);
-            if (!seen.has(key)) {
-              seen.add(key);
+          for (const item of all) {
+            const timeMs = item.timeMs || 0;
+            if (!merged.some(m => Math.abs((m.timeMs || 0) - timeMs) < 30000)) {
               merged.push(item);
             }
           }
+          
           savedTelemetryRecords = merged.slice(0, 120);
-          if (savedTelemetryRecords.length > 120) savedTelemetryRecords.length = 120;
           try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
           renderTelemetryTable();
           hasHydratedTelemetry = true;
@@ -1320,7 +1328,7 @@
 
     async function fetchHardwareDiagnostics() {
       try {
-        const res = await fetch('/api/v1/ingest/sensors/diagnostic');
+        const res = await fetch(`/api/v1/ingest/sensors/diagnostic?_t=${Date.now()}`);
         if (!res.ok) return;
         const data = await res.json();
         if ((data.station_liveness === 'LIVE_ACTIVE' || data.station_liveness === 'PARTIAL_DEGRADED') && data.seconds_since_last_packet <= 35) {

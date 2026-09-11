@@ -61,3 +61,55 @@ The team must fix whatever is causing the dashboard to go permanently offline. T
 - [ ] If using the Python bridge, it contains a robust `try/except` loop that never exits gracefully on error, but rather retries indefinitely.
 - [ ] If using the ESP32 Wi-Fi, the firmware includes a non-blocking Wi-Fi reconnect loop.
 
+## 2026-09-04T13:05:00Z
+
+Deploy the AirSense Pakistan FastAPI backend, database, and autonomous 24/7 background scheduler live with a secure public HTTPS endpoint, verifying all health probes, ingestion routes, and telemetry feeds.
+
+Working directory: c:/Users/HP/AirSense-v2
+
+Integrity mode: development
+
+## Requirements
+
+### R1. Live Public HTTPS Endpoint Provisioning
+Deploy or expose the FastAPI core API (`apps.api.main:app`) via a persistent, secure public HTTPS endpoint (Cloudflare Tunnel / Cloud PaaS) so that remote web clients, edge nodes, and mobile users can access the REST endpoints worldwide.
+
+### R2. End-to-End Live Routing & Ingestion Verification
+Validate that all production endpoints (`/api/v1/health/liveness`, `/api/v1/health/readiness`, `/api/v1/ingest/reading`, `/api/v1/ingest/sensors/diagnostic`, and `/api/v1/providers/weather/telemetry-feed`) return HTTP 200 over the public HTTPS URL.
+
+### R3. Autonomous 24/7 Scheduler & Live Background Ingestion
+Ensure the 24/7 background scheduler continues executing the 60s meteorological stream, 10s node watchdog, and daily backups in the background without requiring any user browser tab.
+
+## Acceptance Criteria
+
+### Live Connectivity
+- [ ] Public HTTPS URL is generated and responds to external HTTP GET/POST requests.
+- [ ] Liveness and readiness health probes return `HTTP 200` with `status: "ready"`.
+- [ ] Public telemetry feed responds with live minute-by-minute meteorological data.
+- [ ] Hardware serial bridge successfully routes physical sensor packets to both local and live cloud endpoints.
+- [ ] GitHub repository `AirSense-v2` created and synced for Render Cloud Blueprint.
+
+## 2026-09-05T17:56:46Z
+
+Update the ESP32 C++ firmware (`scripts/airsense_esp32_firmware/airsense_esp32_firmware.ino`) to be a fully autonomous IoT device that connects directly to the Vercel cloud and MQTT broker without relying on the laptop serial bridge script. 
+
+Working directory: c:/Users/HP/AirSense-v2
+
+## Requirements
+
+### R1. Dynamic Wi-Fi Configuration (WiFiManager)
+Remove hardcoded `WIFI_SSID` and `WIFI_PASS` credentials. Implement the `tzapu/WiFiManager` library in the ESP32 firmware so that on first boot, it broadcasts a Setup AP (e.g., `AirSense-Setup`). Users should be able to connect via their phone to enter their local Wi-Fi credentials dynamically.
+
+### R2. Direct Secure Cloud API Ingestion (HTTPS)
+Update the `API_ENDPOINT` to point directly to the live Vercel production API: `https://airsense-team.vercel.app/api/v1/ingest/reading`. 
+Refactor the local HTTP push logic in the firmware to use `WiFiClientSecure` with `client.setInsecure()` to handle the HTTPS request properly and push the JSON telemetry payload directly to the cloud backend.
+
+### R3. Remove Laptop Dependency
+Ensure that when the ESP32 is powered via a wall adapter, it successfully connects to Wi-Fi, publishes to the HiveMQ Cloud Broker, and executes the HTTPS POST to Vercel independently, enabling the hosted Vercel dashboard to display live online status without the `airsense_serial_live_bridge.py` script running on a laptop.
+
+## Acceptance Criteria
+
+- [ ] Firmware compiles successfully with `WiFiManager` and `WiFiClientSecure` (update the code in the .ino file).
+- [ ] Hardcoded Wi-Fi credentials are removed from the codebase.
+- [ ] Vercel HTTPS URL is configured as the primary ingestion endpoint.
+- [ ] Create a README_FIRMWARE.md or similar instructions for the user on how to install the `WiFiManager` library in Arduino IDE and flash the updated code.

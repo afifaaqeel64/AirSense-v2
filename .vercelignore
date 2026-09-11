@@ -1,22 +1,31 @@
+# Virtual environments & Cache
 .venv
 venv
 ENV
 __pycache__
 .pytest_cache
 .pip_cache
+*.pyc
+
+# Local data & heavy archives
+data/
 *.zip
 *.docx
 *.pdf
 *.bin
+*.exe
+cloudflared.exe
+
+# Agent & Dev files
 .agents
 .git
+.gemini
 tests
 docs
-ml
-alembic
-services
-apps/api
-apps/web_enterprise
+scratch
+scratch_token.txt
+
+# Legacy / Non-production folders
 CP210x_Driver
 BUDGET APPENDIX
 AirSense_Deployable_Platform

@@ -148,7 +148,8 @@ async def get_hardware_status(
 @router.get("/api/v1/hardware/minute-history")
 async def get_minute_history(limit: int = 30, db: AsyncSession = Depends(get_db_session)):
     """Returns continuous minute-by-minute telemetry records enriched with meteorological summaries."""
-    stmt = select(RawReading).order_by(RawReading.received_at.desc()).limit(limit)
+    # Fetch enough raw readings to cover 'limit' minutes (assuming ~12 readings/min = limit * 15 to be safe)
+    stmt = select(RawReading).order_by(RawReading.received_at.desc()).limit(limit * 15)
     res = await db.execute(stmt)
     rows = res.scalars().all()
 
@@ -157,7 +158,17 @@ async def get_minute_history(limit: int = 30, db: AsyncSession = Depends(get_db_
 
     if rows and len(rows) > 0:
         db_records = []
+        seen_minutes = set()
         for r in rows:
+            r_ts = r.received_at if r.received_at else now
+            if r_ts.tzinfo is None:
+                r_ts = r_ts.replace(tzinfo=timezone.utc)
+            
+            minute_key = r_ts.strftime("%Y-%m-%d %H:%M")
+            if minute_key in seen_minutes:
+                continue
+            seen_minutes.add(minute_key)
+
             p25 = float(r.pm2_5) if r.pm2_5 is not None else 12.0
             p1 = float(r.pm1) if r.pm1 is not None else round(p25 * 0.75, 1)
             p10 = float(r.pm10) if r.pm10 is not None else round(p25 * 1.25, 1)
@@ -167,9 +178,6 @@ async def get_minute_history(limit: int = 30, db: AsyncSession = Depends(get_db_
             rf = bool(r.rain_flag)
 
             summary = generate_meteorological_summary(t, h, p, p25, rf)
-            r_ts = r.received_at if r.received_at else now
-            if r_ts.tzinfo is None:
-                r_ts = r_ts.replace(tzinfo=timezone.utc)
 
             db_records.append({
                 "dt": r_ts,
@@ -185,6 +193,9 @@ async def get_minute_history(limit: int = 30, db: AsyncSession = Depends(get_db_
                 "meteorological_summary": summary,
                 "status": "Optimal" if p25 <= 15.0 else "Moderate"
             })
+            
+            if len(db_records) >= limit:
+                break
 
         db_records.sort(key=lambda x: x["dt"], reverse=True)
         newest_ts = db_records[0]["dt"]
