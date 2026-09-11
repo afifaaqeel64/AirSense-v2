@@ -24,11 +24,17 @@ from apps.api.routers.quality_router import router as quality_router
 from apps.api.routers.provider_router import router as provider_router
 from apps.api.routers.export_router import router as export_router
 
-from apps.api.routers.model_router import router as model_router
-from apps.api.routers.forecast_router import router as forecast_router
-from apps.api.routers.comparison_router import router as comparison_router
-from apps.api.routers.evaluation_router import router as evaluation_router
-from apps.api.routers.inference_router import router as inference_router
+try:
+    from apps.api.routers.model_router import router as model_router
+    from apps.api.routers.forecast_router import router as forecast_router
+    from apps.api.routers.comparison_router import router as comparison_router
+    from apps.api.routers.evaluation_router import router as evaluation_router
+    from apps.api.routers.inference_router import router as inference_router
+    HAS_ML_MODULES = True
+except ImportError as _ml_err:
+    HAS_ML_MODULES = False
+    print(f"[AirSense Info] Running in lightweight serverless mode without ML training modules: {_ml_err}")
+
 from apps.api.routers.hardware_router import router as hardware_router
 
 
@@ -148,11 +154,13 @@ app.include_router(quality_router)
 app.include_router(provider_router)
 app.include_router(export_router)
 
-app.include_router(model_router)
-app.include_router(forecast_router)
-app.include_router(comparison_router)
-app.include_router(evaluation_router)
-app.include_router(inference_router)
+if HAS_ML_MODULES:
+    app.include_router(model_router)
+    app.include_router(forecast_router)
+    app.include_router(comparison_router)
+    app.include_router(evaluation_router)
+    app.include_router(inference_router)
+
 app.include_router(hardware_router)
 
 # Operational Interface Static Serving
