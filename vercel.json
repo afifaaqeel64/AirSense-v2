@@ -1,21 +1,24 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "public": true,
-  "name": "airsense-team",
   "cleanUrls": true,
   "trailingSlash": false,
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api"
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/api",
+      "destination": "/api/index.py"
     },
     {
       "source": "/docs",
-      "destination": "/api"
+      "destination": "/api/index.py"
     },
     {
       "source": "/openapi.json",
-      "destination": "/api"
+      "destination": "/api/index.py"
     },
     {
       "source": "/hardware",
