@@ -149,6 +149,8 @@ class VercelPathNormalizer:
 
             if orig_path.startswith("/api/index.py/"):
                 orig_path = orig_path.replace("/api/index.py/", "/api/")
+            elif orig_path.startswith("/api/index/"):
+                orig_path = orig_path.replace("/api/index/", "/api/")
             elif orig_path.startswith("/v1/"):
                 orig_path = f"/api{orig_path}"
             elif orig_path in ("/health", "/health/liveness", "/health/readiness", "/ready"):
