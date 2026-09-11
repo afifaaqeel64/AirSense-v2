@@ -14,8 +14,12 @@ class Settings(BaseSettings):
     AIR_SENSE_TIMEZONE: str = "Asia/Karachi"
     DEBUG: bool = True
 
-    # Database URLs (Supports SQLite fallback Mode A & PostgreSQL Mode B)
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/airsense.db"
+    # Database URLs (Supports SQLite local development & Supabase PostgreSQL cloud production)
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://postgres.vppczkvawiaptiygrqhx:7EZgyMcqYi%269qUE@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+        if os.getenv("VERCEL")
+        else os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/airsense.db")
+    )
     
     # Application & CORS
     BACKEND_BASE_URL: str = "http://localhost:8000"

@@ -208,13 +208,13 @@ async def get_minute_history(limit: int = 30, db: AsyncSession = Depends(get_db_
             base_t = db_records[0]["temperature_c"]
             base_h = db_records[0]["humidity_pct"]
             base_p = db_records[0]["pressure_hpa"]
-            for i in range(gap_mins, 0, -1):
-                t_bridge = now - timedelta(minutes=i - 1)
-                p25 = round(base_p25 + math.sin(i / 5.0) * 0.4, 1)
+            for i in range(gap_mins):
+                t_bridge = now - timedelta(minutes=i)
+                p25 = round(base_p25 + math.sin((i + 1) / 5.0) * 0.4, 1)
                 p1 = round(p25 * 0.75, 1)
                 p10 = round(p25 * 1.25, 1)
-                t_cur = round(base_t - (i * 0.02), 1)
-                h_cur = int(base_h + (i % 2))
+                t_cur = round(base_t - ((i + 1) * 0.02), 1)
+                h_cur = int(base_h + ((i + 1) % 2))
                 summary = generate_meteorological_summary(t_cur, h_cur, base_p, p25, False)
                 bridge_records.append({
                     "dt": t_bridge,
@@ -232,6 +232,7 @@ async def get_minute_history(limit: int = 30, db: AsyncSession = Depends(get_db_
                 })
 
         combined = bridge_records + db_records
+        combined.sort(key=lambda x: x["dt"], reverse=True)
 
         # If still fewer than limit, backfill older history so the table has a full continuous timeline
         if len(combined) < limit:

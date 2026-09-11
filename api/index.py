@@ -15,21 +15,15 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-# When executing in Vercel Serverless (read-only filesystem), relocate SQLite database to /tmp only if DATABASE_URL is unset
+# Production Cloud Database Configuration (Supabase PostgreSQL)
+SUPABASE_CLOUD_URL = "postgresql+asyncpg://postgres.vppczkvawiaptiygrqhx:7EZgyMcqYi%269qUE@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+
+# When executing in Vercel Serverless, guarantee connection to persistent Supabase cloud database.
+# Ephemeral /tmp SQLite resets on every serverless hibernation, destroying background telemetry history.
 if not os.environ.get("DATABASE_URL"):
-    tmp_dir = Path("/tmp/data")
-    tmp_dir.mkdir(parents=True, exist_ok=True)
-    tmp_db = tmp_dir / "airsense.db"
-
-    # Pre-populate /tmp database from local repository data if present
-    repo_db = ROOT_DIR / "data" / "airsense.db"
-    if repo_db.exists() and not tmp_db.exists():
-        try:
-            shutil.copyfile(str(repo_db), str(tmp_db))
-        except Exception:
-            pass
-
-    os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_db.as_posix()}"
+    os.environ["DATABASE_URL"] = SUPABASE_CLOUD_URL
+elif "sqlite" in os.environ.get("DATABASE_URL", ""):
+    os.environ["DATABASE_URL"] = SUPABASE_CLOUD_URL
 
 os.environ["AIR_SENSE_ENV"] = "production"
 

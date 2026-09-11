@@ -1036,10 +1036,10 @@
     if (!savedTelemetryRecords || savedTelemetryRecords.length === 0) {
       const nowMs = Date.now();
       savedTelemetryRecords = [
-        { time: new Date(nowMs - 15000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.5', pm25: '17.8', pm10: '21.0', temp: '28.5', hum: '63.0', press: '1012.2', rain: false, qc: 'VERIFIED RAW' },
-        { time: new Date(nowMs - 30000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.8', pm25: '18.1', pm10: '21.5', temp: '28.6', hum: '63.2', press: '1012.1', rain: false, qc: 'VERIFIED RAW' },
-        { time: new Date(nowMs - 45000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.0', pm25: '18.4', pm10: '22.0', temp: '28.7', hum: '63.5', press: '1012.0', rain: false, qc: 'VERIFIED RAW' },
-        { time: new Date(nowMs - 60000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.2', pm25: '18.7', pm10: '22.5', temp: '28.9', hum: '63.8', press: '1011.9', rain: false, qc: 'VERIFIED RAW' }
+        { timeMs: nowMs - 15000, time: new Date(nowMs - 15000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.5', pm25: '17.8', pm10: '21.0', temp: '28.5', hum: '63.0', press: '1012.2', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 30000, time: new Date(nowMs - 30000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.8', pm25: '18.1', pm10: '21.5', temp: '28.6', hum: '63.2', press: '1012.1', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 45000, time: new Date(nowMs - 45000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.0', pm25: '18.4', pm10: '22.0', temp: '28.7', hum: '63.5', press: '1012.0', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 60000, time: new Date(nowMs - 60000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.2', pm25: '18.7', pm10: '22.5', temp: '28.9', hum: '63.8', press: '1011.9', rain: false, qc: 'VERIFIED RAW' }
       ];
       try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
     }
@@ -1141,8 +1141,9 @@
             };
           });
 
-          // Merge by combining, sorting by time, and deduplicating
-          const all = [...savedTelemetryRecords, ...newRecords];
+          // Authoritative merge: retain recent live packets (< 60s old) from memory, merge with full server history
+          const recentLive = savedTelemetryRecords.filter(r => r.timeMs && (Date.now() - r.timeMs < 60000));
+          const all = [...recentLive, ...newRecords];
           all.sort((a, b) => (b.timeMs || 0) - (a.timeMs || 0));
 
           const merged = [];
@@ -1157,6 +1158,29 @@
           try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
           renderTelemetryTable();
           hasHydratedTelemetry = true;
+
+          // Update primary cards immediately from latest record if currently empty
+          if (history[0]) {
+            const h0 = history[0];
+            const pVal = document.getElementById('pmsVal');
+            if (pVal && (pVal.textContent === '--' || pVal.classList.contains('dimmed'))) {
+              pVal.textContent = h0.pm2_5 != null ? Number(h0.pm2_5).toFixed(1) : '--';
+              pVal.className = '';
+            }
+            const bVal = document.getElementById('bmeVal');
+            if (bVal && (bVal.textContent === '--' || bVal.classList.contains('dimmed'))) {
+              bVal.textContent = h0.temperature_c != null ? Number(h0.temperature_c).toFixed(1) : '--';
+              bVal.className = '';
+            }
+            const bHum = document.getElementById('bmeHumVal');
+            if (bHum && bHum.textContent === '--') {
+              bHum.textContent = h0.humidity_pct != null ? Number(h0.humidity_pct).toFixed(1) : '--';
+            }
+            const bPress = document.getElementById('bmePressVal');
+            if (bPress && bPress.textContent === '--') {
+              bPress.textContent = h0.pressure_hpa != null ? Number(h0.pressure_hpa).toFixed(1) : '--';
+            }
+          }
         }
       } catch (err) {
         console.warn('[Hydration] Could not hydrate historical telemetry:', err);
