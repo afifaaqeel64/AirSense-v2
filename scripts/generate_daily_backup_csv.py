@@ -20,6 +20,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
+import re
 import httpx
 
 # Add project root to Python module path
@@ -58,23 +59,106 @@ def sanitize_csv_cell(val: Any) -> Any:
     return s
 
 
+def normalize_telegram_bot_token(raw_token: Optional[str]) -> str:
+    """Normalizes Telegram Bot Token by stripping quotes, whitespace, URL prefixes, and leading 'bot' prefixes."""
+    if not raw_token:
+        return ""
+    t = str(raw_token).strip().strip('"').strip("'").strip()
+    # Remove leading full URL if pasted: https://api.telegram.org/bot<token>
+    t = re.sub(r"^https?://api\.telegram\.org/bot", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"^api\.telegram\.org/bot", "", t, flags=re.IGNORECASE)
+    # Remove trailing endpoint if pasted: /getMe or /sendDocument
+    t = re.sub(r"/[a-zA-Z]+$", "", t)
+    # If starts with 'bot' followed immediately by digits and colon (e.g. 'bot712345678:ABC...')
+    if t.lower().startswith("bot") and ":" in t:
+        parts = t.split(":", 1)
+        if parts[0][3:].isdigit():
+            t = parts[0][3:] + ":" + parts[1]
+    return t.strip().strip('"').strip("'").strip()
+
+
+def normalize_telegram_chat_id(raw_chat_id: Optional[str]) -> str:
+    """Normalizes Telegram Chat ID by stripping quotes, whitespace, and formatting."""
+    if not raw_chat_id:
+        return ""
+    return str(raw_chat_id).strip().strip('"').strip("'").strip()
+
+
+def mask_secret(val: str, prefix_len: int = 4, suffix_len: int = 4) -> str:
+    """Masks sensitive strings for safe logging."""
+    if not val:
+        return "<empty>"
+    if len(val) <= prefix_len + suffix_len:
+        return "****"
+    return f"{val[:prefix_len]}...{val[-suffix_len:]}"
+
+
 def send_telegram_document(bot_token: str, chat_id: str, file_path: Path, caption: str) -> bool:
-    """Sends backup CSV and summary caption via Telegram Bot API."""
-    url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
-    try:
-        with open(file_path, "rb") as f:
-            files = {"document": (file_path.name, f, "text/csv")}
-            data = {"chat_id": chat_id, "caption": caption}
-            resp = httpx.post(url, data=data, files=files, timeout=30.0)
-            if resp.status_code == 200:
-                logger.info(f"[TELEGRAM] Backup file successfully sent to chat {chat_id}")
-                return True
-            else:
-                logger.warning(f"[TELEGRAM WARNING] Failed to send: HTTP {resp.status_code} - {resp.text}")
-                return False
-    except Exception as e:
-        logger.warning(f"[TELEGRAM ERROR] Network error while sending document: {e}")
+    """Sends backup CSV and summary caption via Telegram Bot API with token normalization and diagnostics."""
+    norm_token = normalize_telegram_bot_token(bot_token)
+    norm_chat = normalize_telegram_chat_id(chat_id)
+
+    if not norm_token or not norm_chat:
+        logger.warning("[TELEGRAM WARNING] Invalid or empty bot token / chat ID after normalization.")
         return False
+
+    # Telegram caption length limit is 1024 characters
+    safe_caption = caption[:1000] if len(caption) > 1000 else caption
+
+    # Candidates to try: normalized token first, then raw token if different
+    candidates = [norm_token]
+    raw_stripped = bot_token.strip().strip('"').strip("'").strip()
+    if raw_stripped and raw_stripped not in candidates:
+        candidates.append(raw_stripped)
+
+    for idx, token in enumerate(candidates):
+        url = f"https://api.telegram.org/bot{token}/sendDocument"
+        masked_tok = mask_secret(token)
+        try:
+            with open(file_path, "rb") as f:
+                files = {"document": (file_path.name, f, "text/csv")}
+                data = {"chat_id": norm_chat, "caption": safe_caption}
+                logger.info(f"[TELEGRAM] Dispatching backup to chat {norm_chat} with token {masked_tok} (attempt {idx+1}/{len(candidates)})...")
+                resp = httpx.post(url, data=data, files=files, timeout=30.0)
+
+                if resp.status_code == 200:
+                    logger.info(f"[TELEGRAM SUCCESS] Backup file successfully delivered to chat {norm_chat}")
+                    return True
+
+                # If 404 and we have another candidate, try candidate
+                if resp.status_code == 404 and idx + 1 < len(candidates):
+                    logger.warning(f"[TELEGRAM] HTTP 404 on attempt {idx+1}, trying fallback candidate...")
+                    continue
+
+                # Log detailed diagnostics for common Telegram errors
+                if resp.status_code == 404:
+                    logger.error(
+                        f"[TELEGRAM ERROR] HTTP 404 Not Found from Telegram Bot API. "
+                        f"The bot token {masked_tok} was rejected by api.telegram.org. "
+                        f"Please verify TELEGRAM_BOT_TOKEN in GitHub repository secrets matches @BotFather."
+                    )
+                elif resp.status_code == 400:
+                    logger.error(
+                        f"[TELEGRAM ERROR] HTTP 400 Bad Request: {resp.text}. "
+                        f"If the error is 'chat not found', the recipient user must open Telegram and send /start to the bot."
+                    )
+                elif resp.status_code == 403:
+                    logger.error(
+                        f"[TELEGRAM ERROR] HTTP 403 Forbidden: {resp.text}. "
+                        f"The bot was blocked by the user or lacks permission to message chat {norm_chat}."
+                    )
+                else:
+                    logger.warning(f"[TELEGRAM WARNING] Failed to send: HTTP {resp.status_code} - {resp.text}")
+
+                return False
+
+        except Exception as e:
+            logger.warning(f"[TELEGRAM ERROR] Network error while sending document: {e}")
+            if idx + 1 < len(candidates):
+                continue
+            return False
+
+    return False
 
 
 async def query_daily_readings(start_utc: datetime, end_utc: datetime):
@@ -199,9 +283,15 @@ async def async_generate_daily_backup(
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
     if send_telegram and bot_token and chat_id:
+        logger.info(f"[TELEGRAM] Initiating notification (Token length: {len(bot_token)}, Chat ID: {mask_secret(chat_id)})...")
         telegram_sent = send_telegram_document(bot_token, chat_id, csv_file, caption)
     else:
-        logger.info("[INFO] Telegram delivery skipped (TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not configured).")
+        logger.info(
+            f"[INFO] Telegram delivery skipped: "
+            f"send_telegram={send_telegram}, "
+            f"bot_token_present={bool(bot_token)}, "
+            f"chat_id_present={bool(chat_id)}."
+        )
 
     return {
         "status": "success",

@@ -365,3 +365,60 @@ def test_dashboards_contain_daily_csv_download_links():
         assert "/api/v1/hardware/daily-csv" in content, f"Missing daily-csv link in {p.name}"
         assert "DAILY 24H CSV" in content, f"Missing DAILY 24H CSV button text in {p.name}"
 
+
+def test_telegram_token_and_chat_id_normalization():
+    """Verifies that various user input formatting anomalies are cleanly sanitized."""
+    from scripts.generate_daily_backup_csv import normalize_telegram_bot_token, normalize_telegram_chat_id
+
+    # 1. Bot token normalization
+    expected = "712345678:ABCDEF1234567890abcdef1234567890"
+    raw_variations = [
+        "bot712345678:ABCDEF1234567890abcdef1234567890",
+        '"712345678:ABCDEF1234567890abcdef1234567890"',
+        "'712345678:ABCDEF1234567890abcdef1234567890' ",
+        "https://api.telegram.org/bot712345678:ABCDEF1234567890abcdef1234567890",
+        "https://api.telegram.org/bot712345678:ABCDEF1234567890abcdef1234567890/getMe",
+        "https://api.telegram.org/bot712345678:ABCDEF1234567890abcdef1234567890/sendDocument",
+        " 712345678:ABCDEF1234567890abcdef1234567890 \n",
+        "712345678:ABCDEF1234567890abcdef1234567890",
+    ]
+    for raw in raw_variations:
+        assert normalize_telegram_bot_token(raw) == expected, f"Failed for raw input: {raw}"
+
+    assert normalize_telegram_bot_token("") == ""
+    assert normalize_telegram_bot_token(None) == ""
+
+    # 2. Chat ID normalization
+    assert normalize_telegram_chat_id(' "123456789" ') == "123456789"
+    assert normalize_telegram_chat_id("-1001234567890") == "-1001234567890"
+    assert normalize_telegram_chat_id("") == ""
+    assert normalize_telegram_chat_id(None) == ""
+
+
+def test_telegram_send_document_handles_prefixed_token_and_caption_limit(tmp_path):
+    """Verifies that send_telegram_document normalizes the token before dispatch and caps captions."""
+    from scripts.generate_daily_backup_csv import send_telegram_document
+
+    test_file = tmp_path / "test.csv"
+    test_file.write_text("header1,header2\n1,2\n", encoding="utf-8")
+
+    prefixed_token = "bot712345678:ABCDEF1234567890"
+    raw_chat = ' "987654321" '
+    long_caption = "A" * 2000
+
+    with patch("httpx.post") as mock_post:
+        mock_post.return_value = MagicMock(status_code=200, text='{"ok": true}')
+
+        success = send_telegram_document(prefixed_token, raw_chat, test_file, long_caption)
+        assert success is True
+
+        mock_post.assert_called_once()
+        call_args = mock_post.call_args
+        # Verify URL uses normalized token without redundant 'botbot'
+        assert call_args[0][0] == "https://api.telegram.org/bot712345678:ABCDEF1234567890/sendDocument"
+        # Verify chat_id is normalized
+        assert call_args[1]["data"]["chat_id"] == "987654321"
+        # Verify caption was capped to <= 1000
+        assert len(call_args[1]["data"]["caption"]) == 1000
+
+
