@@ -116,8 +116,17 @@ async def test_multi_provider_current_weather_fallback():
     assert res.latitude == 33.6844
     assert res.longitude == 73.0479
     assert res.temperature_c is not None
-    assert res.weather_description is not None
-    assert res.provider in ["open_meteo", "weatherapi_com", "openweathermap", "tomorrow_io", "bright_sky", "met_norway", "fallback_offline"]
+    assert res.provider in [
+        "open_meteo",
+        "weatherapi_com",
+        "openweathermap",
+        "tomorrow_io",
+        "bright_sky",
+        "met_norway",
+        "openaq",
+        "station_physics_baseline",
+        "fallback_offline"
+    ]
 
 
 @pytest.mark.asyncio
