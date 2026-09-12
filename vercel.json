@@ -52,6 +52,5 @@
       "source": "/((?!api/).*)",
       "destination": "/public/$1"
     }
-  ],
-  "public": false
+  ]
 }
