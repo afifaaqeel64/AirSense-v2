@@ -161,16 +161,26 @@ def send_telegram_document(bot_token: str, chat_id: str, file_path: Path, captio
     return False
 
 
-async def query_daily_readings(start_utc: datetime, end_utc: datetime):
-    """Fetches raw readings within the target UTC window."""
-    async with async_session_maker() as session:
-        stmt = (
-            select(RawReading)
-            .where(and_(RawReading.observed_at >= start_utc, RawReading.observed_at < end_utc))
-            .order_by(RawReading.observed_at.asc())
-        )
-        res = await session.execute(stmt)
-        return res.scalars().all()
+async def query_daily_readings(start_utc: datetime, end_utc: datetime, max_retries: int = 3):
+    """Fetches raw readings within the target UTC window with retry backoff."""
+    for attempt in range(max_retries):
+        try:
+            async with async_session_maker() as session:
+                stmt = (
+                    select(RawReading)
+                    .where(and_(RawReading.observed_at >= start_utc, RawReading.observed_at < end_utc))
+                    .order_by(RawReading.observed_at.asc())
+                )
+                res = await session.execute(stmt)
+                return res.scalars().all()
+        except Exception as e:
+            if attempt + 1 < max_retries:
+                wait_sec = 2 ** (attempt + 1)
+                logger.warning(f"Database query attempt {attempt + 1} failed ({e}). Retrying in {wait_sec}s...")
+                await asyncio.sleep(wait_sec)
+            else:
+                logger.error(f"Database query failed after {max_retries} attempts: {e}")
+                raise
 
 
 async def async_generate_daily_backup(

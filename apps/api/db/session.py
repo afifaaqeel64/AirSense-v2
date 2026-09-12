@@ -64,9 +64,11 @@ def normalize_database_url(raw_url: str | None) -> str:
             if use_pooler:
                 parts = hostname.split(".")
                 project_ref = parts[1] if len(parts) > 1 else "vppczkvawiaptiygrqhx"
-                # Route through regional Supavisor pooler (session mode port 5432)
+                # Route through regional Supavisor transaction pooler (port 6543) to prevent session exhaustion (EMAXCONNSESSION)
                 pooler_host = os.environ.get("SUPABASE_POOLER_HOST") or "aws-0-ap-northeast-2.pooler.supabase.com"
+                pooler_port = int(os.environ.get("SUPABASE_POOLER_PORT") or 6543)
                 hostname = pooler_host
+                port = pooler_port
                 if not username.endswith(f".{project_ref}"):
                     username = f"{username}.{project_ref}" if username else f"postgres.{project_ref}"
 
@@ -98,11 +100,21 @@ if "sqlite" in normalized_db_url:
     if not parent_dir.exists():
         parent_dir.mkdir(parents=True, exist_ok=True)
 
+# Connection arguments for asyncpg
+connect_args = {}
+if "pooler.supabase.com" in normalized_db_url or ":6543" in normalized_db_url:
+    # Transaction pooler mode requires disabling prepared statement cache in asyncpg
+    connect_args["statement_cache_size"] = 0
+    connect_args["prepared_statement_cache_size"] = 0
+
 engine = create_async_engine(
     normalized_db_url,
     echo=settings.DEBUG,
     future=True,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=5,
+    connect_args=connect_args
 )
 
 AsyncSessionLocal = async_sessionmaker(
