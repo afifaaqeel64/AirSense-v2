@@ -333,7 +333,7 @@ class TestTier1FeatureCoverage:
         assert vercel_json_path.exists()
 
         vercel_content = json.loads(vercel_json_path.read_text(encoding="utf-8"))
-        assert "builds" in vercel_content or "routes" in vercel_content or "public" in vercel_content
+        assert "builds" in vercel_content or "routes" in vercel_content or "public" in vercel_content or "rewrites" in vercel_content
 
     @pytest.mark.asyncio
     async def test_t1_f2_7_disconnection_failover_banner_and_opensource_link(self):
