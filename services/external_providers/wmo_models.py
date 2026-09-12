@@ -1,8 +1,8 @@
 """AirSense Pakistan WMO Weather Codes and Unified Atmospheric Data Models."""
 
 from typing import Dict, Any, Optional
-from pydantic import BaseModel, Field
-from datetime import datetime, timezone
+from pydantic import BaseModel, Field, model_validator
+from datetime import datetime, timezone, timedelta
 
 
 # WMO 4501 Weather Code Definitions, Descriptions, Icons, and Status Colors
@@ -194,3 +194,23 @@ class StandardizedWeatherResponse(BaseModel):
     aqi: Optional[int] = None
     uv_index: Optional[float] = None
     is_cached: bool = False
+
+    @model_validator(mode="after")
+    def populate_pkt_timestamps(self) -> "StandardizedWeatherResponse":
+        if not self.timestamp_pkt or not self.display_time:
+            pkt_tz = timezone(timedelta(hours=5), name="PKT")
+            try:
+                ts_str = (self.timestamp_utc or "").replace("Z", "+00:00")
+                dt = datetime.fromisoformat(ts_str)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                dt_pkt = dt.astimezone(pkt_tz)
+            except Exception:
+                dt_pkt = datetime.now(pkt_tz)
+
+            if not self.timestamp_pkt:
+                self.timestamp_pkt = dt_pkt.strftime("%Y-%m-%d %H:%M:%S PKT")
+            if not self.display_time:
+                self.display_time = dt_pkt.strftime("%H:%M:%S")
+        return self
+

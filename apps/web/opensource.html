@@ -417,8 +417,9 @@
     /* METEOROLOGICAL TABLE */
     .table-responsive {
       overflow-x: auto;
+      overflow-y: auto;
       margin-top: 12px;
-      max-height: 380px;
+      max-height: 480px;
     }
     .feed-table {
       width: 100%;
@@ -856,7 +857,7 @@
       if (isFetching) return;
       isFetching = true;
       try {
-        const feedUrl = `/api/v1/providers/weather/telemetry-feed?limit=30${forceRefresh ? '&force_refresh=true' : ''}`;
+        const feedUrl = `/api/v1/providers/weather/telemetry-feed?limit=60${forceRefresh ? '&force_refresh=true' : ''}`;
         const res = await fetch(feedUrl);
         if (res.ok) {
           const data = await res.json();
@@ -931,7 +932,7 @@
         };
 
         savedWeatherRecords.unshift(fallbackRec);
-        if (savedWeatherRecords.length > 30) savedWeatherRecords.pop();
+        if (savedWeatherRecords.length > 60) savedWeatherRecords.pop();
         try { localStorage.setItem('airsense_weather_records', JSON.stringify(savedWeatherRecords)); } catch(e){}
         updateMetricCards(fallbackRec);
         renderWeatherTable(fallbackRec.display_time);
@@ -983,7 +984,8 @@
       const serverCsvUrl = '/api/v1/providers/weather/telemetry-export.csv?limit=100';
       const link = document.createElement('a');
       link.href = serverCsvUrl;
-      link.setAttribute('download', `airsense_karachi_weather_log_${new Date().toISOString().slice(0,10)}.csv`);
+      const pktDateStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
+      link.setAttribute('download', `airsense_karachi_weather_log_${pktDateStr}.csv`);
       document.body.appendChild(link);
       link.click();
       setTimeout(() => document.body.removeChild(link), 300);

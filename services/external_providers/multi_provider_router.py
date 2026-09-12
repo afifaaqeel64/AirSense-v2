@@ -154,11 +154,11 @@ class MultiProviderWeatherEngine:
         if cls._LAST_KNOWN_READING and cls._LAST_KNOWN_READING.temperature_c is not None:
             last = cls._LAST_KNOWN_READING
             t_base = last.temperature_c + 0.15 * math.sin(hour)
-            h_base = (last.humidity_pct or 70.0) - 0.5 * math.sin(hour)
-            p_base = last.pressure_hpa or 1008.0
-            w_base = last.wind_speed_ms or 3.2
-            p25_base = last.air_quality_pm25 or 14.5
-            p10_base = last.air_quality_pm10 or round(p25_base * 1.85, 1)
+            h_base = (last.humidity_pct if last.humidity_pct is not None else 70.0) - 0.5 * math.sin(hour)
+            p_base = last.pressure_hpa if last.pressure_hpa is not None else 1008.0
+            w_base = last.wind_speed_ms if last.wind_speed_ms is not None else 3.2
+            p25_base = last.air_quality_pm25 if last.air_quality_pm25 is not None else 14.5
+            p10_base = last.air_quality_pm10 if last.air_quality_pm10 is not None else round(p25_base * 1.85, 1)
         else:
             t_base = 28.0 + 4.5 * solar_rad
             h_base = 72.0 - 15.0 * solar_rad
@@ -273,7 +273,7 @@ class MultiProviderWeatherEngine:
                 continue
 
         # If all external APIs fail or time out, synthesize physics baseline
-        if result is None:
+        if result is None or result.temperature_c is None:
             result = cls.synthesize_physics_baseline(latitude, longitude)
 
         # Cache result

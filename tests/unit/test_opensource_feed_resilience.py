@@ -291,3 +291,70 @@ async def test_csv_telemetry_export_headers_and_pkt_time():
         assert len(row_cols) >= 6
         # PKT timestamp column
         assert "PKT" in row_cols[1] or ":" in row_cols[2]
+
+
+@pytest.mark.asyncio
+async def test_telemetry_feed_default_limit_is_60():
+    """Verifies that calling the feed endpoint without limit parameter returns exactly 60 records."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/providers/weather/telemetry-feed")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["records"]) == 60
+
+
+@pytest.mark.asyncio
+async def test_feed_expands_to_satisfy_higher_limit_gaplessly():
+    """Verifies that requesting limit=80 after seeding with 10 records smoothly expands to 80 gapless records."""
+    provider_router._OPEN_SOURCE_MINUTE_HISTORY = []
+    r1 = await ensure_open_source_minute_records(limit=10, force_refresh=True)
+    assert len(r1) == 10
+
+    r2 = await ensure_open_source_minute_records(limit=80, force_refresh=False)
+    assert len(r2) == 80
+
+    for i in range(len(r2) - 1):
+        curr_dt = datetime.strptime(r2[i]["minute_slot"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+        prev_dt = datetime.strptime(r2[i + 1]["minute_slot"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+        assert (curr_dt - prev_dt).total_seconds() == 60
+
+
+def test_weather_router_module_reexport_compatibility():
+    """Verifies that apps.api.routers.weather_router module exists and re-exports all required symbols."""
+    from apps.api.routers import weather_router
+    assert hasattr(weather_router, "router")
+    assert hasattr(weather_router, "ensure_open_source_minute_records")
+    assert hasattr(weather_router, "get_weather_telemetry_feed")
+    assert hasattr(weather_router, "export_weather_telemetry_csv")
+    assert hasattr(weather_router, "PKT_TZ")
+
+
+def test_standardized_weather_response_auto_populates_pkt():
+    """Verifies that StandardizedWeatherResponse auto-populates timestamp_pkt and display_time."""
+    resp = StandardizedWeatherResponse(
+        provider="test_provider",
+        latitude=24.8607,
+        longitude=67.0011,
+        timestamp_utc="2026-09-13T16:51:00Z",
+        temperature_c=28.0
+    )
+    assert resp.timestamp_pkt == "2026-09-13 21:51:00 PKT"
+    assert resp.display_time == "21:51:00"
+
+
+def test_html_dashboards_have_60_limit_and_pkt_date_csv():
+    """Verifies that all three HTML dashboard files specify limit=60, 60-item retention, and PKT date in CSV export."""
+    html_files = [
+        "public/opensource.html",
+        "apps/web/opensource_dashboard.html",
+        "apps/web/opensource.html"
+    ]
+    for path in html_files:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        assert "telemetry-feed?limit=60" in content, f"Missing limit=60 in {path}"
+        assert "savedWeatherRecords.length > 60" in content, f"Missing 60 retention in {path}"
+        assert "timeZone: 'Asia/Karachi'" in content, f"Missing Asia/Karachi timeZone in {path}"
+        assert "TIMESTAMP (PKT / UTC+5)" in content, f"Missing TIMESTAMP header in {path}"
+
