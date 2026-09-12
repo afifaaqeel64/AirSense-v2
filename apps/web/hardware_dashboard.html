@@ -4,6 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AirSense</title>
+  <!-- AirSense Official Favicon Suite & Web Manifest -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
+
   
   <!-- High-Precision Corporate & Monospace Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -133,6 +140,20 @@
       font-family: var(--font-mono);
       font-weight: 800;
       font-size: 16px;
+    }
+
+    .brand-logo {
+      border-radius: var(--radius-md, 8px);
+      background: #FFFFFF;
+      border: 1px solid var(--border, rgba(56, 189, 248, 0.2));
+      object-fit: contain;
+      display: block;
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+      min-height: 38px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     }
 
     .brand-title {
@@ -586,7 +607,7 @@
     <!-- TOPBAR -->
     <header class="topbar">
       <div class="brand-group">
-        <div class="brand-mark">AS</div>
+        <img src="/apple-touch-icon.png" alt="AirSense Logo" class="brand-logo" width="38" height="38">
         <div>
           <div class="brand-title">AirSense</div>
           <div class="brand-sub">Real-Time Hardware Ground-Truth Station</div>

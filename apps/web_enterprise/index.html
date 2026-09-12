@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- AirSense Official Favicon Suite & Web Manifest -->
+<link rel="icon" type="image/x-icon" href="/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+
 <title>AirSense — Environmental Risk Intelligence &amp; Decision Platform</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,6 +19,19 @@
 <!-- Paho MQTT WebSocket Library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
 <style>
+.brand-logo {
+  border-radius: var(--radius-md, 8px);
+  background: #FFFFFF;
+  border: 1px solid var(--border, rgba(56, 189, 248, 0.2));
+  object-fit: contain;
+  display: block;
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
 /* ═══════════════════════════════════════════════
    CSS CUSTOM PROPERTIES — DUAL THEME
 ═══════════════════════════════════════════════ */
@@ -663,7 +683,7 @@ data = resp.json()
 <div class="app-shell" id="govApp">
   <aside class="sidebar" id="govSidebar">
     <div class="sb-head">
-      <div class="sb-logo">Air<span>Sense</span></div>
+      <div class="sb-logo" style="display:flex; align-items:center; gap:8px;"><img src="/apple-touch-icon.png" alt="AirSense Logo" class="brand-logo" width="28" height="28" style="width:28px; height:28px; min-width:28px; min-height:28px; border-radius:6px;">Air<span>Sense</span></div>
       <div class="sb-profile gov">🏛️ Sovereign Government</div>
       <div class="sb-hardware-badge">
         <div class="live-dot-green"></div>

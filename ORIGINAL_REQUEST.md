@@ -113,3 +113,35 @@ Ensure that when the ESP32 is powered via a wall adapter, it successfully connec
 - [ ] Hardcoded Wi-Fi credentials are removed from the codebase.
 - [ ] Vercel HTTPS URL is configured as the primary ingestion endpoint.
 - [ ] Create a README_FIRMWARE.md or similar instructions for the user on how to install the `WiFiManager` library in Arduino IDE and flash the updated code.
+
+## 2026-09-12T11:39:56Z
+
+Integrate the official AirSense logo files located in `assets/logo-files` across the entire project (public dashboards, HTML web templates, favicons, web app manifest, and README documentation).
+
+Working directory: c:/Users/HP/AirSense-v2
+Integrity mode: development
+
+## Requirements
+
+### R1. Comprehensive Web Asset & Favicon Integration
+Distribute and link the logo suite (`favicon.ico`, `favicon-32x32.png`, `favicon-16x16.png`, `apple-touch-icon.png`, `android-chrome-192x192.png`, `android-chrome-512x512.png`, and `site.webmanifest`) into `public/` and `apps/web/` so that every web page (`index.html`, `hardware.html`, `diagnostics.html`, `command.html`, `opensource.html`, `enterprise.html`, `sensor-health.html`) displays the official favicon in browser tabs and supports PWA installation.
+
+### R2. Navigation Bar & Header Brand Placement
+In all dashboard pages (`public/` and `apps/web/`), update the top navigation header to prominently and cleanly feature the official AirSense logo icon alongside the station title, replacing the placeholder "AS" text box while preserving responsive mobile layouts and theme styling.
+
+### R3. Repository & Documentation Branding
+Update `README.md` and project root documentation to feature the official AirSense logo centered in the header banner, properly linked and formatted.
+
+## Acceptance Criteria
+
+### Asset Availability & Favicon Resolution
+- [ ] All favicon sizes (`16x16`, `32x32`, `apple-touch-icon`, `favicon.ico`) and `site.webmanifest` are accessible under `/` or `/assets/logo-files/` with HTTP 200.
+- [ ] Every HTML document in `public/` and `apps/web/` contains `<link rel="icon">`, `<link rel="apple-touch-icon">`, and `<link rel="manifest">` tags.
+
+### Header & UI Rendering
+- [ ] Every dashboard header displays the official AirSense logo image without broken image icons or layout shifts across both desktop and mobile viewports.
+- [ ] Theme toggling (light/dark mode) maintains logo legibility and aesthetic balance.
+
+### Documentation & Regression
+- [ ] `README.md` renders the logo at the top with valid relative image paths.
+- [ ] Automated unit test suite passes with 100% success rate (`py -m pytest`).

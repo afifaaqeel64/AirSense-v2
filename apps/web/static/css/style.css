@@ -1,0 +1,21 @@
+/* AirSense Pakistan Branding Styles */
+.brand-logo {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  border-radius: var(--radius-md, 8px);
+  background: #FFFFFF;
+  border: 1px solid var(--border, rgba(56, 189, 248, 0.2));
+  object-fit: contain;
+  display: block;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+
+.brand-mark {
+  /* Retained for backward compatibility */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

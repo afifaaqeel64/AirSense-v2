@@ -1,6 +1,21 @@
-# AirSense Pakistan
+<p align="center">
+  <img src="assets/logo-files/android-chrome-192x192.png" alt="AirSense Pakistan Official Logo" width="128" height="128" style="border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);" />
+</p>
 
-**Production-Quality, Zero-Cost Campus Air-Quality Intelligence & PM2.5 Forecasting Platform**
+<h1 align="center">AirSense Pakistan</h1>
+
+<p align="center">
+  <strong>Production-Quality, Zero-Cost Campus Air-Quality Intelligence & PM2.5 Forecasting Platform</strong>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Status-Live%20Production-10B981?style=flat-square" alt="Status" />
+  <img src="https://img.shields.io/badge/Python-3.11%20%7C%203.12%20%7C%203.13-0284C7?style=flat-square" alt="Python" />
+  <img src="https://img.shields.io/badge/FastAPI-v3.5.0-059669?style=flat-square" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Deployment-Vercel%20%7C%20Render-8B5CF6?style=flat-square" alt="Deployment" />
+  <img src="https://img.shields.io/badge/License-MIT-gray?style=flat-square" alt="License" />
+</p>
+
 
 AirSense Pakistan provides hyper-local environmental intelligence and PM2.5 forecasting for campus pilot locations in Pakistan:
 

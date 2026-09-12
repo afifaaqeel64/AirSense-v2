@@ -211,6 +211,48 @@ if enterprise_dir.exists():
     async def serve_enterprise_interface():
         return FileResponse(enterprise_dir / "index.html")
 
+# Assets & Official Branding Static Serving
+assets_dir = Path(__file__).resolve().parent.parent.parent / "assets"
+assets_logo_dir = assets_dir / "logo-files"
+public_dir = Path(__file__).resolve().parent.parent.parent / "public"
+
+if assets_logo_dir.exists():
+    app.mount("/assets/logo-files", StaticFiles(directory=str(assets_logo_dir)), name="assets_logo_files")
+elif (public_dir / "assets" / "logo-files").exists():
+    app.mount("/assets/logo-files", StaticFiles(directory=str(public_dir / "assets" / "logo-files")), name="assets_logo_files")
+elif (web_dir / "assets" / "logo-files").exists():
+    app.mount("/assets/logo-files", StaticFiles(directory=str(web_dir / "assets" / "logo-files")), name="assets_logo_files")
+
+if assets_dir.exists():
+    app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+FAVICON_ROUTES = {
+    "/favicon.ico": ("favicon.ico", "image/x-icon"),
+    "/favicon-16x16.png": ("favicon-16x16.png", "image/png"),
+    "/favicon-32x32.png": ("favicon-32x32.png", "image/png"),
+    "/apple-touch-icon.png": ("apple-touch-icon.png", "image/png"),
+    "/android-chrome-192x192.png": ("android-chrome-192x192.png", "image/png"),
+    "/android-chrome-512x512.png": ("android-chrome-512x512.png", "image/png"),
+    "/site.webmanifest": ("site.webmanifest", "application/manifest+json"),
+}
+
+for route_path, (file_name, media_type) in FAVICON_ROUTES.items():
+    def _create_static_responder(target_name=file_name, mime_type=media_type):
+        async def _serve_branding_file():
+            candidates = [
+                assets_logo_dir / target_name,
+                public_dir / target_name,
+                web_dir / target_name,
+            ]
+            for candidate in candidates:
+                if candidate.exists():
+                    return FileResponse(candidate, media_type=mime_type)
+            raise HTTPException(status_code=404, detail=f"Branding asset {target_name} not found")
+        return _serve_branding_file
+
+    app.get(route_path, include_in_schema=False)(_create_static_responder(file_name, media_type))
+
+
 
 class CopilotChatRequest(BaseModel):
     message: str
