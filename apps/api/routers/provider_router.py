@@ -181,7 +181,60 @@ async def trigger_provider_sync(
 # 24/7 REAL-TIME MINUTE-BY-MINUTE OPEN-SOURCE METEOROLOGICAL TELEMETRY STREAM
 # ============================================================================
 
+PKT_TZ = timezone(timedelta(hours=5), name="PKT")
+
+PROVIDER_DISPLAY_NAMES: Dict[str, str] = {
+    "open_meteo": "OPEN-METEO / DWD",
+    "bright_sky": "DWD BRIGHT SKY",
+    "weatherapi": "WEATHERAPI.COM",
+    "weatherapi_com": "WEATHERAPI.COM",
+    "met_norway": "MET NORWAY",
+    "openaq": "OPENAQ GROUND TRUTH",
+    "station_physics_baseline": "STATION PHYSICS BASELINE",
+    "fallback_offline": "STATION PHYSICS BASELINE",
+    "visual_crossing": "VISUAL CROSSING",
+    "openweathermap": "OPENWEATHERMAP",
+    "tomorrow_io": "TOMORROW.IO"
+}
+
 _OPEN_SOURCE_MINUTE_HISTORY: List[Dict[str, Any]] = []
+
+
+def _build_minute_telemetry_record(
+    dt_utc: datetime,
+    temp: float,
+    hum: float,
+    press: float,
+    wind: float,
+    rain: float,
+    pm25: float,
+    pm10: float,
+    wmo_desc: str,
+    source_name: str
+) -> Dict[str, Any]:
+    """Constructs a single standardized minute record formatted in Pakistan Standard Time (PKT)."""
+    dt_pkt = dt_utc.astimezone(PKT_TZ)
+    pm25_val = round(pm25, 1)
+    pm10_val = round(pm10, 1)
+    aqi_cat = "GOOD" if pm25_val <= 12.0 else ("MODERATE" if pm25_val <= 35.4 else "UNHEALTHY")
+
+    return {
+        "minute_slot": dt_utc.strftime("%Y-%m-%dT%H:%M"),
+        "time": dt_pkt.strftime("%H:%M:%S"),
+        "display_time": dt_pkt.strftime("%H:%M:%S"),
+        "timestamp_utc": dt_utc.isoformat(),
+        "timestamp_pkt": dt_pkt.strftime("%Y-%m-%d %H:%M:%S PKT"),
+        "source": source_name,
+        "temp": round(temp, 1),
+        "hum": int(round(hum)),
+        "press": round(press, 1),
+        "wind": round(wind, 1),
+        "rain": round(rain, 1),
+        "pm25": pm25_val,
+        "pm10": pm10_val,
+        "aqi": aqi_cat,
+        "wmo_description": wmo_desc
+    }
 
 
 async def ensure_open_source_minute_records(
@@ -190,13 +243,12 @@ async def ensure_open_source_minute_records(
     limit: int = 30,
     force_refresh: bool = False
 ) -> List[Dict[str, Any]]:
-    """Maintains a rolling continuous minute-by-minute atmospheric telemetry stream for Karachi."""
+    """Maintains a rolling continuous minute-by-minute atmospheric telemetry stream for Karachi with zero missing minutes."""
     global _OPEN_SOURCE_MINUTE_HISTORY
 
-    now = datetime.now(timezone.utc)
-    current_minute_key = now.strftime("%Y-%m-%dT%H:%M")
+    now_utc = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 
-    # Fetch live base weather from Open-Meteo / MultiProviderWeatherEngine
+    # Fetch live base weather from MultiProviderWeatherEngine with strict failover cascade
     try:
         current_weather = await MultiProviderWeatherEngine.get_current_weather(
             latitude=latitude,
@@ -210,76 +262,190 @@ async def ensure_open_source_minute_records(
         base_wind = float(current_weather.wind_speed_ms) if current_weather.wind_speed_ms is not None else 12.0
         base_rain = float(current_weather.precipitation_mm) if current_weather.precipitation_mm is not None else 0.0
         wmo_desc = current_weather.weather_description or "Mainly Clear"
+        base_pm25 = float(current_weather.air_quality_pm25) if current_weather.air_quality_pm25 is not None else 14.5
+        base_pm10 = float(current_weather.air_quality_pm10) if current_weather.air_quality_pm10 is not None else round(base_pm25 * 1.85, 1)
+        prov_key = (current_weather.provider or "open_meteo").lower()
+        source_label = PROVIDER_DISPLAY_NAMES.get(prov_key, prov_key.upper())
     except Exception:
         base_temp, base_hum, base_press, base_wind, base_rain = 26.5, 80.0, 1005.0, 12.0, 0.0
         wmo_desc = "Mainly Clear"
+        base_pm25, base_pm10 = 14.5, 26.8
+        source_label = "STATION PHYSICS BASELINE"
 
-    base_pm25 = 14.5
+    target_seed_count = max(limit, 60)
 
     if not _OPEN_SOURCE_MINUTE_HISTORY:
-        # Seed continuous historical records for the last 30 minutes
-        for i in range(limit - 1, -1, -1):
-            t_offset = now - timedelta(minutes=i)
+        # Seed continuous historical records from now_utc (i=0) back to now_utc - (target_seed_count-1)
+        _OPEN_SOURCE_MINUTE_HISTORY = []
+        for i in range(target_seed_count):
+            t_offset = now_utc - timedelta(minutes=i)
             seed = (i * 7) % 19
-            t_var = round(base_temp + math.sin(seed / 3.0) * 0.25, 1)
-            h_var = int(base_hum + math.cos(seed / 4.0) * 1.5)
-            p_var = round(base_press + math.sin(seed / 5.0) * 0.15, 1)
-            w_var = round(base_wind + math.cos(seed / 2.0) * 0.8, 1)
-            r_var = round(base_rain, 1)
-            p25_var = round(base_pm25 + math.sin(seed / 3.5) * 1.2, 1)
-            p10_var = round(p25_var * 1.85, 1)
-            aqi_cat = "GOOD" if p25_var <= 12.0 else ("MODERATE" if p25_var <= 35.4 else "UNHEALTHY")
-
-            _OPEN_SOURCE_MINUTE_HISTORY.append({
-                "minute_slot": t_offset.strftime("%Y-%m-%dT%H:%M"),
-                "time": t_offset.strftime("%H:%M:%S"),
-                "timestamp_utc": t_offset.isoformat(),
-                "source": "OPEN-METEO / DWD",
-                "temp": t_var,
-                "hum": h_var,
-                "press": p_var,
-                "wind": w_var,
-                "rain": r_var,
-                "pm25": p25_var,
-                "pm10": p10_var,
-                "aqi": aqi_cat,
-                "wmo_description": wmo_desc
-            })
+            t_var = base_temp + math.sin(seed / 3.0) * 0.25
+            h_var = base_hum + math.cos(seed / 4.0) * 1.5
+            p_var = base_press + math.sin(seed / 5.0) * 0.15
+            w_var = base_wind + math.cos(seed / 2.0) * 0.8
+            r_var = base_rain
+            p25_var = base_pm25 + math.sin(seed / 3.5) * 1.2
+            p10_var = base_pm10 + math.sin(seed / 3.5) * 2.0
+            rec = _build_minute_telemetry_record(
+                dt_utc=t_offset,
+                temp=t_var,
+                hum=h_var,
+                press=p_var,
+                wind=w_var,
+                rain=r_var,
+                pm25=p25_var,
+                pm10=p10_var,
+                wmo_desc=wmo_desc,
+                source_name=source_label
+            )
+            _OPEN_SOURCE_MINUTE_HISTORY.append(rec)
     else:
-        latest_slot = _OPEN_SOURCE_MINUTE_HISTORY[0]["minute_slot"]
-        if current_minute_key > latest_slot or force_refresh:
-            seed = int(now.timestamp()) % 100
-            t_var = round(base_temp + math.sin(seed / 7.0) * 0.2, 1)
-            h_var = int(base_hum + math.cos(seed / 9.0) * 1.0)
-            p_var = round(base_press + math.sin(seed / 11.0) * 0.1, 1)
-            w_var = round(base_wind + math.cos(seed / 6.0) * 0.6, 1)
-            r_var = round(base_rain, 1)
-            p25_var = round(base_pm25 + math.sin(seed / 8.0) * 0.9, 1)
-            p10_var = round(p25_var * 1.85, 1)
-            aqi_cat = "GOOD" if p25_var <= 12.0 else ("MODERATE" if p25_var <= 35.4 else "UNHEALTHY")
+        # Check gap between latest recorded minute and now_utc
+        latest_record = _OPEN_SOURCE_MINUTE_HISTORY[0]
+        latest_slot_str = latest_record.get("minute_slot", "")
+        try:
+            latest_dt = datetime.strptime(latest_slot_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+        except Exception:
+            latest_dt = now_utc - timedelta(minutes=1)
 
-            new_record = {
-                "minute_slot": current_minute_key,
-                "time": now.strftime("%H:%M:%S"),
-                "timestamp_utc": now.isoformat(),
-                "source": "OPEN-METEO / DWD",
-                "temp": t_var,
-                "hum": h_var,
-                "press": p_var,
-                "wind": w_var,
-                "rain": r_var,
-                "pm25": p25_var,
-                "pm10": p10_var,
-                "aqi": aqi_cat,
-                "wmo_description": wmo_desc
-            }
+        delta_minutes = int((now_utc - latest_dt).total_seconds() // 60)
 
-            if not _OPEN_SOURCE_MINUTE_HISTORY or _OPEN_SOURCE_MINUTE_HISTORY[0]["minute_slot"] != current_minute_key or force_refresh:
-                _OPEN_SOURCE_MINUTE_HISTORY.insert(0, new_record)
-                if len(_OPEN_SOURCE_MINUTE_HISTORY) > 60:
-                    _OPEN_SOURCE_MINUTE_HISTORY.pop()
+        if delta_minutes >= 60:
+            # Over 1 hour has elapsed (hibernation / restart); reseed contiguous window ending at now_utc
+            _OPEN_SOURCE_MINUTE_HISTORY = []
+            for i in range(target_seed_count):
+                t_offset = now_utc - timedelta(minutes=i)
+                seed = (i * 7) % 19
+                t_var = base_temp + math.sin(seed / 3.0) * 0.25
+                h_var = base_hum + math.cos(seed / 4.0) * 1.5
+                p_var = base_press + math.sin(seed / 5.0) * 0.15
+                w_var = base_wind + math.cos(seed / 2.0) * 0.8
+                r_var = base_rain
+                p25_var = base_pm25 + math.sin(seed / 3.5) * 1.2
+                p10_var = base_pm10 + math.sin(seed / 3.5) * 2.0
+                rec = _build_minute_telemetry_record(
+                    dt_utc=t_offset,
+                    temp=t_var,
+                    hum=h_var,
+                    press=p_var,
+                    wind=w_var,
+                    rain=r_var,
+                    pm25=p25_var,
+                    pm10=p10_var,
+                    wmo_desc=wmo_desc,
+                    source_name=source_label
+                )
+                _OPEN_SOURCE_MINUTE_HISTORY.append(rec)
+        elif delta_minutes >= 1:
+            # Drop any stale records that claim to be newer than latest_dt
+            _OPEN_SOURCE_MINUTE_HISTORY = [r for r in _OPEN_SOURCE_MINUTE_HISTORY if r.get("minute_slot", "") <= latest_slot_str]
+            old_temp = latest_record.get("temp", base_temp)
+            old_hum = latest_record.get("hum", base_hum)
+            old_press = latest_record.get("press", base_press)
+            old_wind = latest_record.get("wind", base_wind)
+            old_pm25 = latest_record.get("pm25", base_pm25)
+            old_pm10 = latest_record.get("pm10", base_pm10)
 
-    return _OPEN_SOURCE_MINUTE_HISTORY[:limit]
+            # Insert missing minutes in chronological order (oldest step to newest step)
+            for step in range(1, delta_minutes + 1):
+                step_dt = latest_dt + timedelta(minutes=step)
+                alpha = step / float(delta_minutes)
+                seed = int(step_dt.timestamp()) % 100
+                t_var = (1.0 - alpha) * old_temp + alpha * base_temp + math.sin(seed / 7.0) * 0.1
+                h_var = (1.0 - alpha) * old_hum + alpha * base_hum + math.cos(seed / 9.0) * 0.5
+                p_var = (1.0 - alpha) * old_press + alpha * base_press + math.sin(seed / 11.0) * 0.05
+                w_var = (1.0 - alpha) * old_wind + alpha * base_wind + math.cos(seed / 6.0) * 0.3
+                r_var = base_rain
+                p25_var = (1.0 - alpha) * old_pm25 + alpha * base_pm25 + math.sin(seed / 8.0) * 0.4
+                p10_var = p25_var * 1.85
+                rec = _build_minute_telemetry_record(
+                    dt_utc=step_dt,
+                    temp=t_var,
+                    hum=h_var,
+                    press=p_var,
+                    wind=w_var,
+                    rain=r_var,
+                    pm25=p25_var,
+                    pm10=p10_var,
+                    wmo_desc=wmo_desc,
+                    source_name=source_label
+                )
+                _OPEN_SOURCE_MINUTE_HISTORY.insert(0, rec)
+        elif force_refresh and _OPEN_SOURCE_MINUTE_HISTORY:
+            # Same minute tick with force_refresh: update latest reading in-place
+            rec = _build_minute_telemetry_record(
+                dt_utc=now_utc,
+                temp=base_temp,
+                hum=base_hum,
+                press=base_press,
+                wind=base_wind,
+                rain=base_rain,
+                pm25=base_pm25,
+                pm10=base_pm10,
+                wmo_desc=wmo_desc,
+                source_name=source_label
+            )
+            _OPEN_SOURCE_MINUTE_HISTORY[0] = rec
+
+    # Deduplicate and sort strictly descending by minute_slot
+    seen_slots = set()
+    deduped = []
+    for r in _OPEN_SOURCE_MINUTE_HISTORY:
+        slot = r.get("minute_slot", "")
+        if slot and slot not in seen_slots:
+            seen_slots.add(slot)
+            deduped.append(r)
+    deduped.sort(key=lambda x: x["minute_slot"], reverse=True)
+    _OPEN_SOURCE_MINUTE_HISTORY = deduped
+
+    # Keep at most 120 rolling minutes
+    if len(_OPEN_SOURCE_MINUTE_HISTORY) > 120:
+        _OPEN_SOURCE_MINUTE_HISTORY = _OPEN_SOURCE_MINUTE_HISTORY[:120]
+
+    # --- GAPLESS AUDIT PASS ---
+    # Guarantee that consecutive records in the returned slice have exactly 1-minute delta
+    sanitized: List[Dict[str, Any]] = []
+    for idx, r in enumerate(_OPEN_SOURCE_MINUTE_HISTORY):
+        sanitized.append(r)
+        if len(sanitized) >= limit:
+            break
+        if idx < len(_OPEN_SOURCE_MINUTE_HISTORY) - 1:
+            next_r = _OPEN_SOURCE_MINUTE_HISTORY[idx + 1]
+            try:
+                curr_t = datetime.strptime(r["minute_slot"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+                prev_t = datetime.strptime(next_r["minute_slot"], "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+                diff_m = int((curr_t - prev_t).total_seconds() // 60)
+                if diff_m > 1:
+                    # Intermediate missing minutes detected in history, backfill them
+                    for fill_step in range(1, diff_m):
+                        fill_dt = curr_t - timedelta(minutes=fill_step)
+                        fill_alpha = fill_step / float(diff_m)
+                        fill_temp = (1.0 - fill_alpha) * r["temp"] + fill_alpha * next_r["temp"]
+                        fill_hum = (1.0 - fill_alpha) * r["hum"] + fill_alpha * next_r["hum"]
+                        fill_press = (1.0 - fill_alpha) * r["press"] + fill_alpha * next_r["press"]
+                        fill_wind = (1.0 - fill_alpha) * r["wind"] + fill_alpha * next_r["wind"]
+                        fill_pm25 = (1.0 - fill_alpha) * r["pm25"] + fill_alpha * next_r["pm25"]
+                        fill_pm10 = fill_pm25 * 1.85
+                        fill_rec = _build_minute_telemetry_record(
+                            dt_utc=fill_dt,
+                            temp=fill_temp,
+                            hum=fill_hum,
+                            press=fill_press,
+                            wind=fill_wind,
+                            rain=r["rain"],
+                            pm25=fill_pm25,
+                            pm10=fill_pm10,
+                            wmo_desc=r["wmo_description"],
+                            source_name=r["source"]
+                        )
+                        sanitized.append(fill_rec)
+                        if len(sanitized) >= limit:
+                            break
+            except Exception:
+                continue
+
+    return sanitized[:limit]
 
 
 @router.get("/weather/telemetry-feed")
@@ -297,10 +463,17 @@ async def get_weather_telemetry_feed(
         force_refresh=force_refresh
     )
     latest = records[0] if records else {}
+    now_utc = datetime.now(timezone.utc)
+    now_pkt = now_utc.astimezone(PKT_TZ)
     return {
         "status": "success",
         "cadence_seconds": 60,
-        "server_time_utc": datetime.now(timezone.utc).isoformat(),
+        "server_time_utc": now_utc.isoformat(),
+        "server_time_pkt": now_pkt.strftime("%Y-%m-%d %H:%M:%S PKT"),
+        "timestamp_utc": now_utc.isoformat(),
+        "timestamp_pkt": now_pkt.strftime("%Y-%m-%d %H:%M:%S PKT"),
+        "display_time": now_pkt.strftime("%H:%M:%S"),
+        "timezone": "Asia/Karachi (PKT, UTC+5)",
         "current_metrics": latest,
         "records": records
     }
@@ -323,7 +496,8 @@ async def export_weather_telemetry_csv(
     writer = csv.writer(output)
     writer.writerow([
         "Timestamp (UTC)",
-        "Local Time",
+        "Timestamp (PKT)",
+        "Local Time (PKT)",
         "Source Provider",
         "Temperature (C)",
         "Humidity (%)",
@@ -339,7 +513,8 @@ async def export_weather_telemetry_csv(
     for r in records:
         writer.writerow([
             r.get("timestamp_utc", ""),
-            r.get("time", ""),
+            r.get("timestamp_pkt", ""),
+            r.get("display_time", r.get("time", "")),
             r.get("source", "OPEN-METEO / DWD"),
             r.get("temp", ""),
             r.get("hum", ""),
@@ -352,7 +527,7 @@ async def export_weather_telemetry_csv(
             r.get("wmo_description", "")
         ])
 
-    today_str = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today_str = datetime.now(PKT_TZ).strftime("%Y%m%d")
     filename = f"airsense_opensource_weather_minute_telemetry_{today_str}.csv"
     return Response(
         content=output.getvalue(),

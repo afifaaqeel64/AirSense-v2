@@ -175,6 +175,8 @@ class StandardizedWeatherResponse(BaseModel):
     latitude: float
     longitude: float
     timestamp_utc: str
+    timestamp_pkt: Optional[str] = None
+    display_time: Optional[str] = None
     temperature_c: Optional[float] = None
     humidity_pct: Optional[float] = None
     pressure_hpa: Optional[float] = None

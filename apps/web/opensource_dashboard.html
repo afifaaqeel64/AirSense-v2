@@ -522,7 +522,7 @@
           🟢 24/7 UPTIME GUARANTEED
         </div>
         <button class="action-btn" onclick="toggleTheme()">THEME</button>
-        <button class="action-btn" style="background:var(--blue-600); color:#FFF;" onclick="fetchRealWeatherData()">
+        <button class="action-btn" style="background:var(--blue-600); color:#FFF;" onclick="forceMinuteTick()">
           REFRESH LIVE
         </button>
       </div>
@@ -667,7 +667,7 @@
         <table class="feed-table">
           <thead>
             <tr>
-              <th>TIMESTAMP</th>
+              <th>TIMESTAMP (PKT / UTC+5)</th>
               <th>SOURCE</th>
               <th>TEMP (°C)</th>
               <th>HUMIDITY (%)</th>
@@ -760,6 +760,28 @@
       savedWeatherRecords = JSON.parse(localStorage.getItem('airsense_weather_records') || '[]');
     } catch(e) { savedWeatherRecords = []; }
 
+    // High-Precision Pakistan Standard Time (PKT, UTC+5) Formatter
+    function formatPktDisplay(r) {
+      if (r.display_time) return r.display_time;
+      if (r.time && r.timestamp_pkt) return r.time;
+      if (r.timestamp_utc) {
+        try {
+          const d = new Date(r.timestamp_utc);
+          return d.toLocaleTimeString('en-GB', { timeZone: 'Asia/Karachi', hour12: false });
+        } catch(e) {}
+      }
+      if (r.time) return r.time;
+      return '--:--:--';
+    }
+
+    function getPktNowString() {
+      try {
+        return new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Karachi', hour12: false }) + ' PKT (UTC+5)';
+      } catch(e) {
+        return new Date().toLocaleTimeString();
+      }
+    }
+
     function renderWeatherTable(highlightTime) {
       const tbody = document.getElementById('weatherTableBody');
       if (!tbody) return;
@@ -768,12 +790,13 @@
         return;
       }
       tbody.innerHTML = savedWeatherRecords.map(r => {
-        const isNew = highlightTime && r.time === highlightTime;
+        const timeDisplay = formatPktDisplay(r);
+        const isNew = highlightTime && (timeDisplay === highlightTime || r.time === highlightTime);
         const aqiColor = r.aqi === 'GOOD' ? '#059669' : (r.aqi === 'MODERATE' ? '#D97706' : '#DC2626');
         const aqiBg = r.aqi === 'GOOD' ? 'rgba(16, 185, 129, 0.15)' : (r.aqi === 'MODERATE' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(239, 68, 68, 0.15)');
         return `
           <tr class="${isNew ? 'new-minute-row' : ''}" style="transition: background 0.8s;">
-            <td><strong>${r.time || r.timestamp_utc?.substring(11, 19) || '--:--:--'}</strong></td>
+            <td><strong>${timeDisplay}</strong> <span style="font-size:10px; color:var(--text-muted); font-weight:600;">PKT</span></td>
             <td><span class="badge-tag" style="background:var(--blue-100); color:var(--blue-900); font-weight:700;">${r.source || 'OPEN-METEO / DWD'}</span></td>
             <td>${r.temp}°C</td>
             <td>${r.hum}%</td>
@@ -807,7 +830,27 @@
       }
     }
 
+    // --- DRIFT-COMPENSATED 60-SECOND CADENCE ENGINE & FAILOVER RETRY ---
+    let targetCadenceTimestamp = Date.now() + 60000;
     let isFetching = false;
+    let retryTimeout = null;
+    let fetchRetryAttempts = 0;
+
+    function scheduleFetchRetry() {
+      if (retryTimeout) clearTimeout(retryTimeout);
+      fetchRetryAttempts++;
+      // Fast retry within 2-3s with exponential backoff: 2.5s, 5s, max 10s
+      const delayMs = Math.min(10000, Math.max(2500, fetchRetryAttempts * 2500));
+      const el = document.getElementById('minuteCountdown');
+      if (el) {
+        el.textContent = `Retry ${Math.round(delayMs / 1000)}s`;
+        el.style.color = '#D97706';
+      }
+      retryTimeout = setTimeout(() => {
+        retryTimeout = null;
+        fetchMinuteTelemetry(false, true);
+      }, delayMs);
+    }
 
     async function fetchMinuteTelemetry(isMinuteTick = false, forceRefresh = false) {
       if (isFetching) return;
@@ -821,8 +864,14 @@
             savedWeatherRecords = data.records;
             try { localStorage.setItem('airsense_weather_records', JSON.stringify(savedWeatherRecords)); } catch(e){}
             updateMetricCards(data.current_metrics || savedWeatherRecords[0]);
-            renderWeatherTable(isMinuteTick ? savedWeatherRecords[0]?.time : null);
-            document.getElementById('lastFetchText').textContent = 'Live Feed: Auto-Updating Every Minute (Synchronized ' + new Date().toLocaleTimeString() + ')';
+            renderWeatherTable(isMinuteTick ? (savedWeatherRecords[0]?.display_time || savedWeatherRecords[0]?.time) : null);
+            document.getElementById('lastFetchText').textContent = 'Live Feed: Auto-Updating Every Minute (Synchronized at ' + getPktNowString() + ')';
+            fetchRetryAttempts = 0;
+            if (retryTimeout) {
+              clearTimeout(retryTimeout);
+              retryTimeout = null;
+            }
+            targetCadenceTimestamp = Date.now() + 60000;
             isFetching = false;
             return;
           }
@@ -833,8 +882,8 @@
 
       // Resilient fallback to Open-Meteo direct API if backend is unreachable
       try {
-        const urlWeather = 'https://api.open-meteo.com/v1/forecast?latitude=24.8607&longitude=67.0011&current=temperature_2m,relative_humidity_2m,surface_pressure,precipitation,wind_speed_10m&timezone=auto';
-        const urlAirQuality = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=24.8607&longitude=67.0011&current=pm10,pm2_5&timezone=auto';
+        const urlWeather = 'https://api.open-meteo.com/v1/forecast?latitude=24.8607&longitude=67.0011&current=temperature_2m,relative_humidity_2m,surface_pressure,precipitation,wind_speed_10m&timezone=Asia%2FKarachi';
+        const urlAirQuality = 'https://air-quality-api.open-meteo.com/v1/air-quality?latitude=24.8607&longitude=67.0011&current=pm10,pm2_5&timezone=Asia%2FKarachi';
 
         const [resW, resAQ] = await Promise.all([
           fetch(urlWeather).catch(() => null),
@@ -853,6 +902,8 @@
         }
 
         const now = new Date();
+        const pktTime = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Karachi', hour12: false });
+        const pktDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Karachi' });
         const tVal = curr ? Number(curr.temperature_2m).toFixed(1) : '26.4';
         const hVal = curr ? Math.round(curr.relative_humidity_2m) : 82;
         const pVal = curr ? Number(curr.surface_pressure).toFixed(1) : '1005.2';
@@ -864,8 +915,10 @@
         const aqiText = f25 <= 12 ? 'GOOD' : (f25 <= 35.4 ? 'MODERATE' : 'UNHEALTHY');
 
         const fallbackRec = {
-          time: now.toLocaleTimeString(),
+          time: pktTime,
+          display_time: pktTime,
           timestamp_utc: now.toISOString(),
+          timestamp_pkt: `${pktDate} ${pktTime} PKT`,
           source: 'OPEN-METEO / DWD',
           temp: tVal,
           hum: hVal,
@@ -881,38 +934,46 @@
         if (savedWeatherRecords.length > 30) savedWeatherRecords.pop();
         try { localStorage.setItem('airsense_weather_records', JSON.stringify(savedWeatherRecords)); } catch(e){}
         updateMetricCards(fallbackRec);
-        renderWeatherTable(fallbackRec.time);
-        document.getElementById('lastFetchText').textContent = 'Live Feed: Updated ' + now.toLocaleTimeString();
+        renderWeatherTable(fallbackRec.display_time);
+        document.getElementById('lastFetchText').textContent = 'Live Feed: Updated at ' + getPktNowString();
+        fetchRetryAttempts = 0;
+        targetCadenceTimestamp = Date.now() + 60000;
       } catch (e) {
         console.error('Fallback fetch error:', e);
+        scheduleFetchRetry();
       } finally {
         isFetching = false;
       }
     }
 
-    // --- REAL-TIME 60-SECOND MINUTE CADENCE ENGINE ---
-    let countdownSeconds = 60;
-
     function tickCadenceTimer() {
-      countdownSeconds--;
+      const now = Date.now();
+      const remainingMs = targetCadenceTimestamp - now;
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+
       const el = document.getElementById('minuteCountdown');
-      if (el) {
-        el.textContent = `${countdownSeconds}s`;
-        if (countdownSeconds <= 5) {
+      if (el && !retryTimeout) {
+        el.textContent = `${remainingSec}s`;
+        if (remainingSec <= 5) {
           el.style.color = '#10B981';
         } else {
           el.style.color = 'var(--blue-600)';
         }
       }
 
-      if (countdownSeconds <= 0) {
-        countdownSeconds = 60;
+      if (remainingMs <= 0) {
+        targetCadenceTimestamp = Date.now() + 60000;
         fetchMinuteTelemetry(true, false);
       }
     }
 
     window.forceMinuteTick = function() {
-      countdownSeconds = 60;
+      if (retryTimeout) {
+        clearTimeout(retryTimeout);
+        retryTimeout = null;
+      }
+      fetchRetryAttempts = 0;
+      targetCadenceTimestamp = Date.now() + 60000;
       const el = document.getElementById('minuteCountdown');
       if (el) el.textContent = '60s';
       fetchMinuteTelemetry(true, true);
@@ -937,8 +998,26 @@
     // Initial load fetch
     fetchMinuteTelemetry(false, false);
 
-    // 1-second countdown interval driving the 60-second minute cadence
+    // 1-second drift-compensated tick
     setInterval(tickCadenceTimer, 1000);
+
+    // Catch-up and hydrate whenever tab resumes from background or throttled state
+    function handleTabResume() {
+      const now = Date.now();
+      if (now >= targetCadenceTimestamp || (targetCadenceTimestamp - now) > 60000) {
+        targetCadenceTimestamp = Date.now() + 60000;
+        fetchMinuteTelemetry(true, false);
+      } else {
+        tickCadenceTimer();
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        handleTabResume();
+      }
+    });
+    window.addEventListener('focus', handleTabResume);
   </script>
 </body>
 </html>
