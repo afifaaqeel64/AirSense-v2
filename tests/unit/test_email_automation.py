@@ -355,3 +355,57 @@ async def test_telegram_webhook_commands():
             res4 = await client.post("/api/v1/telegram/webhook", json=payload_multi_email)
             assert res4.status_code == 200
             assert res4.json()["ok"] is True
+
+
+def test_render_and_send_introduction_email(tmp_path):
+    """Verifies that the introduction email renders correctly and dispatches via SMTP with attachments."""
+    from services.notification.email_dispatcher import (
+        render_introduction_email_text,
+        render_introduction_email_html,
+        send_introduction_email
+    )
+
+    recipients = ["lead@airsense.pk", "engineer@domain.com"]
+    text = render_introduction_email_text(recipients)
+    html = render_introduction_email_html(recipients)
+
+    assert "AIRSENSE PAKISTAN - SYSTEM ACTIVATION" in text
+    assert "BIC-KHI-ROOF-01" in text
+    assert "00:01 PKT (19:01 UTC)" in text
+    assert "https://airsense-team.vercel.app" in text
+
+    assert "AirSense Pakistan" in html
+    assert "System Active" in html
+    assert "3-Tier Framework" in html
+    assert "https://airsense-team.vercel.app" in html
+
+    # Mock SMTP transmission
+    csv_file = tmp_path / "sample_dataset.csv"
+    csv_file.write_text("pm1,pm2_5,co2\n10,15,410\n", encoding="utf-8")
+
+    with patch("smtplib.SMTP") as mock_smtp_cls:
+        mock_server = MagicMock()
+        mock_smtp_cls.return_value = mock_server
+
+        sent = send_introduction_email(
+            attachments=[csv_file],
+            to_emails="lead@airsense.pk, engineer@domain.com",
+            smtp_host="smtp.gmail.com",
+            smtp_port=587,
+            smtp_user="airsense.pilot@gmail.com",
+            smtp_password="app-password-1234",
+            use_tls=True
+        )
+
+        assert sent is True
+        mock_smtp_cls.assert_called_once_with("smtp.gmail.com", 587, timeout=30.0)
+        mock_server.starttls.assert_called_once()
+        mock_server.login.assert_called_once_with("airsense.pilot@gmail.com", "app-password-1234")
+        mock_server.send_message.assert_called_once()
+        mock_server.quit.assert_called_once()
+
+        # Check msg headers
+        msg = mock_server.send_message.call_args[0][0]
+        assert "System Activation: Automated Daily Briefings & 3-Tier ML Datasets Configured" in msg["Subject"]
+        assert "lead@airsense.pk, engineer@domain.com" in msg["To"]
+

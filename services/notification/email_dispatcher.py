@@ -399,3 +399,321 @@ def send_daily_backup_email(
     except Exception as e:
         logger.error(f"[EMAIL UNEXPECTED ERROR] An error occurred during email transmission: {e}")
         return False
+
+
+def render_introduction_email_text(recipients: List[str]) -> str:
+    """Renders plain text version of the AirSense introduction and system activation email."""
+    recip_str = ", ".join(recipients) if recipients else "Valued Team Member"
+    text = f"""AIRSENSE PAKISTAN - SYSTEM ACTIVATION & INTRODUCTION BRIEFING
+Station Node: BIC-KHI-ROOF-01 (Karachi Rooftop Pilot Node)
+Live Platform: https://airsense-team.vercel.app
+
+Dear AirSense Team & Research Collaborators,
+
+We are excited to announce that the AirSense Pakistan Autonomous Telemetry & Data Delivery Pipeline has been successfully configured, verified, and officially activated!
+
+You have been registered on the automated notification list ({recip_str}) and will now be receiving daily environmental briefings and verified 3-tier datasets directly to your inbox.
+
+WHAT YOU WILL BE RECEIVING DAILY:
+1. Schedule: Everyday at 00:01 PKT (19:01 UTC), capturing the complete 24-hour cycle of real-time physical observations.
+2. Environmental Digest: Summary metrics including Average/Min/Max PM2.5 concentrations, WHO Air Quality status, Ambient Temperature, Relative Humidity, Surface Pressure, and Rain status.
+3. Machine-Learning Ready Datasets:
+   - Tier 1: High-frequency physical hardware sensor readings + verified open-source chemical atmospheric variables (CO, NO2, SO2, O3, CO2).
+   - Tier 2: Pure open-source meteorological & chemical grid.
+   - Tier 3: The primary defining dataset featuring all 35 hardware, chemical, and physical variables with automated cross-sensor discrepancy metrics and SHA-256 provenance hashes.
+   - Full Tiered ZIP Archive: Compressed package containing all dataset tiers for permanent archival.
+
+INTERACTIVE PLATFORM & BOT ACCESS:
+- Web Dashboard: https://airsense-team.vercel.app
+  Real-time gauges, live 60-second meteorological stream, sensor health inspector, and command center.
+- Telegram Bot Assistant:
+  You can also interact with the AirSense Telegram bot directly:
+  • /backup - Requests an instant dual dispatch to Telegram and your email.
+  • /email [YYYY-MM-DD] - Requests datasets for a specific calendar date.
+  • /status - Checks station connectivity and live sensor health.
+
+Thank you for being part of the AirSense Pakistan initiative to advance air quality transparency and atmospheric intelligence.
+
+Warm regards,
+AirSense Pakistan Engineering & Research Team
+Bahria Innovation Center, Karachi, Pakistan
+"""
+    return text
+
+
+def render_introduction_email_html(recipients: List[str]) -> str:
+    """Renders modern, responsive HTML introduction and system activation email."""
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AirSense Pakistan - System Activation & Introduction</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #080c14; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc;">
+  <table width="100%" cellspacing="0" cellpadding="0" style="background-color: #080c14; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="640" cellspacing="0" cellpadding="0" style="max-width: 640px; width: 100%; background-color: #0f172a; border: 1px solid #1e293b; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);">
+          
+          <!-- Header Banner -->
+          <tr>
+            <td style="padding: 32px 32px 24px 32px; background: linear-gradient(135deg, #0b1329 0%, #172554 100%); border-bottom: 1px solid #1e3a8a;">
+              <table width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #38bdf8; margin-bottom: 6px;">
+                      Autonomous Environmental Intelligence
+                    </div>
+                    <h1 style="margin: 0; font-size: 24px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">
+                      AirSense Pakistan
+                    </h1>
+                    <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
+                      Karachi Rooftop Node &bull; Station ID: <code style="background-color: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-family: monospace;">BIC-KHI-ROOF-01</code>
+                    </div>
+                  </td>
+                  <td align="right" valign="top">
+                    <span style="display: inline-block; background-color: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981; font-size: 11px; font-weight: 700; padding: 6px 14px; border-radius: 9999px; letter-spacing: 0.5px; text-transform: uppercase;">
+                      &bull; System Active
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Welcome & Announcement -->
+          <tr>
+            <td style="padding: 28px 32px 16px 32px;">
+              <h2 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 700; color: #f1f5f9;">
+                Welcome to AirSense Daily Telemetry & Intelligence
+              </h2>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #cbd5e1;">
+                We are excited to share that the <strong>AirSense Pakistan Autonomous Telemetry & Data Delivery Pipeline</strong> has been fully configured, verified, and officially activated!
+              </p>
+              <p style="margin: 0 0 16px 0; font-size: 14px; line-height: 1.6; color: #94a3b8;">
+                Your email address is registered on our automated distribution list. Starting immediately, you and the team will receive <strong>daily automated environmental briefings and verified 3-tier datasets</strong> delivered directly to your inbox.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Feature Cards Grid -->
+          <tr>
+            <td style="padding: 0 32px 20px 32px;">
+              <table width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <!-- Card 1: Schedule -->
+                  <td width="48%" style="background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; vertical-align: top;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">⏰</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 4px;">Daily Schedule</div>
+                    <div style="font-size: 12px; line-height: 1.5; color: #cbd5e1;">
+                      Delivered automatically everyday at <strong style="color: #f1f5f9;">00:01 PKT (19:01 UTC)</strong> via 24/7 cloud scheduler, capturing the full 24-hour cycle of live station observations.
+                    </div>
+                  </td>
+                  <td width="4%">&nbsp;</td>
+                  <!-- Card 2: Environmental Digest -->
+                  <td width="48%" style="background-color: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 18px; vertical-align: top;">
+                    <div style="font-size: 20px; margin-bottom: 8px;">📊</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #10b981; margin-bottom: 4px;">Environmental Digest</div>
+                    <div style="font-size: 12px; line-height: 1.5; color: #cbd5e1;">
+                      Key observation metrics including <strong style="color: #f1f5f9;">PM1.0, PM2.5, PM10</strong>, WHO AQI standards, ambient temperature, humidity, surface pressure, and rain states.
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- 3-Tier Datasets Section -->
+          <tr>
+            <td style="padding: 0 32px 24px 32px;">
+              <div style="background-color: #162032; border: 1px solid #283548; border-radius: 12px; padding: 20px;">
+                <div style="font-size: 13px; font-weight: 700; color: #f1f5f9; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.8px;">
+                  📦 What Datasets You Will Receive (3-Tier Framework)
+                </div>
+                <table width="100%" cellspacing="0" cellpadding="0">
+                  <tr style="border-bottom: 1px solid #223049;">
+                    <td style="padding: 8px 0; font-size: 13px; color: #38bdf8; font-weight: 700; width: 80px;">Tier 1</td>
+                    <td style="padding: 8px 0; font-size: 12px; color: #cbd5e1;">
+                      <strong>Hardware Physical Readings + Verified Chemical Variables</strong> (CO, NO2, SO2, O3, CO2).
+                    </td>
+                  </tr>
+                  <tr style="border-bottom: 1px solid #223049;">
+                    <td style="padding: 8px 0; font-size: 13px; color: #a78bfa; font-weight: 700; width: 80px;">Tier 2</td>
+                    <td style="padding: 8px 0; font-size: 12px; color: #cbd5e1;">
+                      <strong>Pure Open-Source Baseline Grid</strong>: Numerical weather and chemical observations from verified meteorological agencies.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 8px 0; font-size: 13px; color: #10b981; font-weight: 700; width: 80px;">Tier 3 ★</td>
+                    <td style="padding: 8px 0; font-size: 12px; color: #cbd5e1;">
+                      <strong>ML Cumulative Validated Dataset</strong>: The primary defining dataset with all 35 validated variables, cross-sensor anomaly detection, and cryptographic SHA-256 provenance hashes.
+                    </td>
+                  </tr>
+                </table>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Telegram Bot Card -->
+          <tr>
+            <td style="padding: 0 32px 24px 32px;">
+              <div style="background-color: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 12px; padding: 18px;">
+                <div style="font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">
+                  🤖 Interactive Telegram Bot Commands
+                </div>
+                <div style="font-size: 12px; line-height: 1.6; color: #cbd5e1;">
+                  You can also interact directly with the AirSense Telegram bot at any time:<br>
+                  &bull; <code style="color: #38bdf8;">/backup</code> &mdash; Requests an instant dual dispatch to Telegram chat and your email.<br>
+                  &bull; <code style="color: #38bdf8;">/email [YYYY-MM-DD]</code> &mdash; Requests datasets for a specific calendar date.<br>
+                  &bull; <code style="color: #38bdf8;">/status</code> &mdash; Checks station liveness, sensor health, and last backup stats.
+                </div>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Action Button -->
+          <tr>
+            <td align="center" style="padding: 0 32px 32px 32px;">
+              <a href="https://airsense-team.vercel.app" style="display: inline-block; background-color: #10b981; color: #064e3b; font-size: 14px; font-weight: 700; text-decoration: none; padding: 12px 32px; border-radius: 8px; box-shadow: 0 4px 12px rgba(16,185,129,0.3);">
+                Explore Live Environmental Dashboard &rarr;
+              </a>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 32px; background-color: #090e1a; border-top: 1px solid #1e293b; text-align: center;">
+              <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">
+                AirSense Pakistan &bull; Bahria Innovation Center (BIC), Karachi, Pakistan
+              </div>
+              <div style="font-size: 11px; color: #475569;">
+                Autonomous IoT Environmental Monitoring Network &bull; Zero-Cost Cloud Infrastructure
+              </div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>"""
+    return html
+
+
+def send_introduction_email(
+    attachments: Optional[List[Union[Path, str]]] = None,
+    to_emails: Optional[Union[str, List[str]]] = None,
+    smtp_host: Optional[str] = None,
+    smtp_port: Optional[int] = None,
+    smtp_user: Optional[str] = None,
+    smtp_password: Optional[str] = None,
+    subject_prefix: str = "AirSense Pakistan",
+    use_tls: bool = True,
+    timeout: float = 30.0
+) -> bool:
+    """Dispatches introductory system activation email to designated recipients.
+
+    Returns:
+        True if email successfully transmitted, False otherwise.
+    """
+    host = smtp_host or os.environ.get("SMTP_HOST", "smtp.gmail.com")
+    port = int(smtp_port or os.environ.get("SMTP_PORT", 587))
+    user = smtp_user or os.environ.get("SMTP_USER") or os.environ.get("EMAIL_USER") or ""
+    password = smtp_password or os.environ.get("SMTP_PASSWORD") or os.environ.get("EMAIL_PASSWORD") or ""
+    recipients_raw = to_emails or os.environ.get("EMAIL_TO") or os.environ.get("ALERT_EMAIL_RECIPIENTS") or ""
+
+    recipients = parse_email_recipients(recipients_raw)
+
+    if not user or not password:
+        logger.info(
+            f"[EMAIL NOTICE] Introduction email skipped: SMTP credentials not configured "
+            f"(user_present={bool(user)}, password_present={bool(password)})."
+        )
+        return False
+
+    if not recipients:
+        logger.warning("[EMAIL WARNING] Introduction email skipped: No valid recipients found in EMAIL_TO.")
+        return False
+
+    masked_user = mask_email_secret(user)
+    masked_recipients = [mask_email_secret(r) for r in recipients]
+    logger.info(
+        f"[EMAIL] Preparing introduction activation email via {host}:{port} "
+        f"from {masked_user} to {len(recipients)} recipient(s): {', '.join(masked_recipients)}..."
+    )
+
+    msg = EmailMessage()
+    msg["Subject"] = f"[{subject_prefix}] System Activation: Automated Daily Briefings & 3-Tier ML Datasets Configured"
+    msg["From"] = f"AirSense Pakistan <{user}>"
+    msg["To"] = ", ".join(recipients)
+
+    text_content = render_introduction_email_text(recipients)
+    html_content = render_introduction_email_html(recipients)
+
+    msg.set_content(text_content)
+    msg.add_alternative(html_content, subtype="html")
+
+    att_list = attachments or []
+    attached_count = 0
+
+    for item in att_list:
+        p = Path(item)
+        if not p.exists() or p.stat().st_size == 0:
+            logger.warning(f"[EMAIL WARNING] Attachment {p.name} does not exist or is empty; skipping.")
+            continue
+
+        file_size_kb = round(p.stat().st_size / 1024, 1)
+
+        if p.suffix.lower() == ".csv":
+            maintype, subtype = "text", "csv"
+        elif p.suffix.lower() == ".zip":
+            maintype, subtype = "application", "zip"
+        else:
+            maintype, subtype = "application", "octet-stream"
+
+        try:
+            with open(p, "rb") as f:
+                file_bytes = f.read()
+            msg.add_attachment(
+                file_bytes,
+                maintype=maintype,
+                subtype=subtype,
+                filename=p.name
+            )
+            attached_count += 1
+            logger.info(f"[EMAIL] Attached {p.name} ({file_size_kb} KB) [{maintype}/{subtype}].")
+        except Exception as e:
+            logger.error(f"[EMAIL ERROR] Failed to attach {p.name}: {e}")
+
+    try:
+        if port == 465:
+            server = smtplib.SMTP_SSL(host, port, timeout=timeout)
+        else:
+            server = smtplib.SMTP(host, port, timeout=timeout)
+            if use_tls:
+                server.starttls()
+
+        server.login(user, password)
+        server.send_message(msg)
+        server.quit()
+
+        logger.info(
+            f"[EMAIL SUCCESS] Successfully sent introduction email with {attached_count} attachment(s) "
+            f"to {len(recipients)} recipient(s)."
+        )
+        return True
+
+    except smtplib.SMTPAuthenticationError as e:
+        logger.error(
+            f"[EMAIL AUTH ERROR] SMTP Authentication failed ({e.smtp_code}: {e.smtp_error})."
+        )
+        return False
+    except (smtplib.SMTPConnectError, smtplib.SMTPServerDisconnected, TimeoutError, OSError) as e:
+        logger.error(f"[EMAIL CONNECTION ERROR] Could not connect to SMTP server {host}:{port}: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"[EMAIL UNEXPECTED ERROR] An error occurred during email transmission: {e}")
+        return False
+
