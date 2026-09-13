@@ -14,6 +14,10 @@ on:
         description: 'Dataset tier to generate: 1, 2, 3, or all'
         required: false
         default: 'all'
+      email_to:
+        description: 'Optional recipient email address(es) override'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -39,11 +43,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generate 3-Tier CSVs & Deliver Telegram Notification
+      - name: Generate 3-Tier CSVs & Deliver Telegram and Email Notifications
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || '587' }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ github.event.inputs.email_to || secrets.EMAIL_TO }}
         run: |
           if [ -z "$DATABASE_URL" ]; then
             unset DATABASE_URL
@@ -54,6 +63,9 @@ jobs:
           fi
           if [ -n "${{ github.event.inputs.tier }}" ]; then
             CMD="$CMD --tier ${{ github.event.inputs.tier }}"
+          fi
+          if [ -n "${{ github.event.inputs.email_to }}" ]; then
+            CMD="$CMD --email-to '${{ github.event.inputs.email_to }}'"
           fi
           echo "Executing: $CMD"
           $CMD

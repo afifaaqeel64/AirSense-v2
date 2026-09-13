@@ -35,6 +35,10 @@ if os.environ.get("DATABASE_URL") == "":
 from apps.api.db.session import async_session_maker
 from apps.api.db.models import RawReading
 from sqlalchemy import select, and_
+from services.notification.email_dispatcher import (
+    send_daily_backup_email,
+    parse_email_recipients
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("airsense.daily_backup")
@@ -187,6 +191,9 @@ async def async_generate_daily_backup(
     target_date: Optional[datetime.date] = None,
     output_dir: Optional[Path] = None,
     send_telegram: bool = True,
+    send_email: bool = True,
+    email_to: Optional[str] = None,
+    attach_zip: bool = True,
     tier: str = "all"
 ) -> Dict[str, Any]:
     """Asynchronously generates 3-tier partitioned CSV backups, cross-validation, and dispatches notification."""
@@ -336,8 +343,13 @@ async def async_generate_daily_backup(
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
-    # Delivery file: attach defining Tier 3 file if records exist, otherwise legacy CSV
+    # 5. Delivery file: attach defining Tier 3 file if records exist, otherwise legacy CSV
     delivery_file = tier3_file if total_records > 0 else csv_file
+
+    # 6. Telegram Bot Notification Dispatch
+    telegram_sent = False
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
     if send_telegram and bot_token and chat_id:
         logger.info(f"[TELEGRAM] Initiating notification (Token length: {len(bot_token)}, Chat ID: {mask_secret(chat_id)})...")
@@ -350,6 +362,46 @@ async def async_generate_daily_backup(
             f"chat_id_present={bool(chat_id)}."
         )
 
+    # 7. Automated Email Dispatch (Concurrent with Telegram)
+    email_sent = False
+    resolved_recipients = email_to or os.environ.get("EMAIL_TO") or os.environ.get("ALERT_EMAIL_RECIPIENTS") or ""
+    recipients_list = parse_email_recipients(resolved_recipients)
+
+    if send_email and recipients_list:
+        summary_payload = {
+            "avg_pm25": avg_pm25,
+            "min_pm25": min_pm25,
+            "max_pm25": max_pm25,
+            "avg_temp": avg_temp,
+            "avg_hum": avg_hum,
+            "total_records": total_records,
+            "tier_counts": {
+                "tier1": len(tier1_rows),
+                "tier2": len(tier2_rows),
+                "tier3": len(tier3_rows),
+                "valid_tier3": valid_tier3_count
+            }
+        }
+
+        # Include both defining Tier 3 CSV and complete zipped tiered bundle
+        email_attachments = [delivery_file]
+        if attach_zip and zip_file.exists():
+            email_attachments.append(zip_file)
+
+        logger.info(f"[EMAIL] Initiating dual email dispatch for date {date_str_dash} to {len(recipients_list)} recipient(s)...")
+        email_sent = send_daily_backup_email(
+            target_date=date_str_dash,
+            summary_data=summary_payload,
+            attachments=email_attachments,
+            to_emails=recipients_list
+        )
+    else:
+        logger.info(
+            f"[INFO] Email delivery skipped: "
+            f"send_email={send_email}, "
+            f"recipients_present={bool(recipients_list)}."
+        )
+
     return {
         "status": "success",
         "target_date": date_str_dash,
@@ -360,6 +412,8 @@ async def async_generate_daily_backup(
         "zip_path": str(zip_file),
         "total_records": total_records,
         "telegram_sent": telegram_sent,
+        "email_sent": email_sent,
+        "email_recipients": recipients_list,
         "tier_counts": {
             "tier1": len(tier1_rows),
             "tier2": len(tier2_rows),
@@ -380,6 +434,9 @@ def generate_daily_backup(
     target_date: Optional[datetime.date] = None,
     output_dir: Optional[Path] = None,
     send_telegram: bool = True,
+    send_email: bool = True,
+    email_to: Optional[str] = None,
+    attach_zip: bool = True,
     tier: str = "all"
 ) -> Dict[str, Any]:
     """Generates daily partitioned CSV backup and dispatches notification, safely handling running event loops."""
@@ -391,19 +448,44 @@ def generate_daily_backup(
     if loop and loop.is_running():
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(lambda: asyncio.run(async_generate_daily_backup(target_date, output_dir, send_telegram, tier=tier)))
+            future = executor.submit(
+                lambda: asyncio.run(
+                    async_generate_daily_backup(
+                        target_date=target_date,
+                        output_dir=output_dir,
+                        send_telegram=send_telegram,
+                        send_email=send_email,
+                        email_to=email_to,
+                        attach_zip=attach_zip,
+                        tier=tier
+                    )
+                )
+            )
             return future.result()
     else:
-        return asyncio.run(async_generate_daily_backup(target_date, output_dir, send_telegram, tier=tier))
+        return asyncio.run(
+            async_generate_daily_backup(
+                target_date=target_date,
+                output_dir=output_dir,
+                send_telegram=send_telegram,
+                send_email=send_email,
+                email_to=email_to,
+                attach_zip=attach_zip,
+                tier=tier
+            )
+        )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AirSense 3-Tier Telemetry Backup & Telegram Exporter")
+    parser = argparse.ArgumentParser(description="AirSense 3-Tier Telemetry Backup & Telegram/Email Exporter")
     parser.add_argument("--date", type=str, default=None, help="Target date YYYY-MM-DD (defaults to yesterday in PKT UTC+5)")
     parser.add_argument("--output-dir", type=str, default=None, help="Directory to save backup CSV")
     parser.add_argument("--db-url", type=str, default=None, help="Optional database connection URL override")
     parser.add_argument("--tier", type=str, choices=["1", "2", "3", "all"], default="all", help="Specific tier to focus on (default: all)")
     parser.add_argument("--no-telegram", action="store_true", help="Disable Telegram dispatch")
+    parser.add_argument("--no-email", action="store_true", help="Disable Email dispatch")
+    parser.add_argument("--email-to", type=str, default=None, help="Recipient email address(es) override (comma-separated)")
+    parser.add_argument("--no-attach-zip", action="store_true", help="Do not attach full zip archive to email")
     args = parser.parse_args()
 
     if args.db_url:
@@ -418,7 +500,15 @@ def main():
             sys.exit(1)
 
     out_dir = Path(args.output_dir) if args.output_dir else None
-    res = generate_daily_backup(target_date=target_date, output_dir=out_dir, send_telegram=not args.no_telegram, tier=args.tier)
+    res = generate_daily_backup(
+        target_date=target_date,
+        output_dir=out_dir,
+        send_telegram=not args.no_telegram,
+        send_email=not args.no_email,
+        email_to=args.email_to,
+        attach_zip=not args.no_attach_zip,
+        tier=args.tier
+    )
     logger.info(f"Backup process finished with status: {res['status']}")
 
 

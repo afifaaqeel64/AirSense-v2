@@ -36,6 +36,7 @@ except ImportError as _ml_err:
     print(f"[AirSense Info] Running in lightweight serverless mode without ML training modules: {_ml_err}")
 
 from apps.api.routers.hardware_router import router as hardware_router
+from apps.api.routers.telegram_router import router as telegram_router
 
 
 @asynccontextmanager
@@ -162,6 +163,7 @@ if HAS_ML_MODULES:
     app.include_router(inference_router)
 
 app.include_router(hardware_router)
+app.include_router(telegram_router)
 
 # Operational Interface Static Serving
 web_dir = Path(__file__).resolve().parent.parent / "web"
