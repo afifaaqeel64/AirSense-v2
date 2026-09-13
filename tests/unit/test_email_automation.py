@@ -371,11 +371,13 @@ def test_render_and_send_introduction_email(tmp_path):
 
     assert "AIRSENSE PAKISTAN - SYSTEM ACTIVATION" in text
     assert "BIC-KHI-ROOF-01" in text
+    assert "Beaconhouse International College" in text
     assert "00:01 PKT (19:01 UTC)" in text
     assert "https://airsense-team.vercel.app" in text
 
     assert "AirSense Pakistan" in html
     assert "System Active" in html
+    assert "Beaconhouse International College" in html
     assert "3-Tier Framework" in html
     assert "https://airsense-team.vercel.app" in html
 

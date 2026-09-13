@@ -257,7 +257,7 @@ def render_backup_email_html(summary_data: Dict[str, Any], target_date: str) -> 
           <tr>
             <td style="background-color: #0d1527; padding: 20px 32px; border-top: 1px solid #1e293b; text-align: center;">
               <p style="margin: 0; font-size: 11px; color: #64748b;">
-                AirSense Pakistan Autonomous Monitoring System • BIC Rooftop, Karachi
+                AirSense Pakistan Autonomous Monitoring System • Beaconhouse International College (BIC) Rooftop, Karachi
               </p>
               <p style="margin: 4px 0 0 0; font-size: 10px; color: #475569;">
                 Automated 24/7 telemetry snapshot dispatched concurrently with Telegram Bot channel.
@@ -405,7 +405,7 @@ def render_introduction_email_text(recipients: List[str]) -> str:
     """Renders plain text version of the AirSense introduction and system activation email."""
     recip_str = ", ".join(recipients) if recipients else "Valued Team Member"
     text = f"""AIRSENSE PAKISTAN - SYSTEM ACTIVATION & INTRODUCTION BRIEFING
-Station Node: BIC-KHI-ROOF-01 (Karachi Rooftop Pilot Node)
+Station Node: BIC-KHI-ROOF-01 (Beaconhouse International College, Karachi Rooftop)
 Live Platform: https://airsense-team.vercel.app
 
 Dear AirSense Team & Research Collaborators,
@@ -436,7 +436,7 @@ Thank you for being part of the AirSense Pakistan initiative to advance air qual
 
 Warm regards,
 AirSense Pakistan Engineering & Research Team
-Bahria Innovation Center, Karachi, Pakistan
+Beaconhouse International College (BIC), Karachi, Pakistan
 """
     return text
 
@@ -469,7 +469,7 @@ def render_introduction_email_html(recipients: List[str]) -> str:
                       AirSense Pakistan
                     </h1>
                     <div style="font-size: 13px; color: #94a3b8; margin-top: 4px;">
-                      Karachi Rooftop Node &bull; Station ID: <code style="background-color: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-family: monospace;">BIC-KHI-ROOF-01</code>
+                      Beaconhouse International College (BIC) Karachi Rooftop &bull; Station ID: <code style="background-color: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-family: monospace;">BIC-KHI-ROOF-01</code>
                     </div>
                   </td>
                   <td align="right" valign="top">
@@ -585,7 +585,7 @@ def render_introduction_email_html(recipients: List[str]) -> str:
           <tr>
             <td style="padding: 20px 32px; background-color: #090e1a; border-top: 1px solid #1e293b; text-align: center;">
               <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">
-                AirSense Pakistan &bull; Bahria Innovation Center (BIC), Karachi, Pakistan
+                AirSense Pakistan &bull; Beaconhouse International College (BIC), Karachi, Pakistan
               </div>
               <div style="font-size: 11px; color: #475569;">
                 Autonomous IoT Environmental Monitoring Network &bull; Zero-Cost Cloud Infrastructure
