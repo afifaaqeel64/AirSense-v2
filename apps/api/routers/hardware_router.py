@@ -347,9 +347,18 @@ async def export_minute_csv(db: AsyncSession = Depends(get_db_session)):
 @router.get("/api/v1/hardware/daily-csv")
 async def get_daily_csv(
     date_str: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format (PKT UTC+5). Defaults to yesterday in PKT."),
+    tier: Optional[int] = Query(None, ge=1, le=3, description="Dataset Tier: 1 (Hardware+Chemicals), 2 (Pure Open-Source), 3 (ML Cumulative Validated). If omitted, returns legacy backup CSV."),
     db: AsyncSession = Depends(get_db_session)
 ):
-    """Streams a downloadable CSV file containing all raw telemetry readings for a specific PKT calendar day."""
+    """Streams a downloadable CSV file containing raw telemetry readings or tiered datasets for a specific PKT calendar day."""
+    from services.quality_control.three_tier_framework import (
+        fetch_verified_opensource_hourly,
+        build_tier1_dataset,
+        build_tier2_dataset,
+        build_tier3_dataset,
+        FULL_SCHEMA_COLUMNS
+    )
+
     pkt_tz = timezone(timedelta(hours=5))
     now_pkt = datetime.now(pkt_tz)
 
@@ -370,6 +379,46 @@ async def get_daily_csv(
     start_utc = start_pkt.astimezone(timezone.utc)
     end_utc = end_pkt.astimezone(timezone.utc)
 
+    # 1. Tiered CSV generation when tier in (1, 2, 3)
+    if tier in (1, 2, 3):
+        os_hourly = await fetch_verified_opensource_hourly(target_date)
+
+        if tier == 2:
+            rows = build_tier2_dataset(os_hourly)
+            filename = f"tier2_opensource_pure_{formatted_date}.csv"
+        else:
+            stmt = (
+                select(RawReading)
+                .where(and_(RawReading.observed_at >= start_utc, RawReading.observed_at < end_utc))
+                .order_by(RawReading.observed_at.asc())
+                .limit(20000)
+            )
+            res = await db.execute(stmt)
+            readings = res.scalars().all()
+
+            if tier == 1:
+                rows = build_tier1_dataset(readings, os_hourly)
+                filename = f"tier1_hardware_chemical_{formatted_date}.csv"
+            else:  # tier == 3
+                rows = build_tier3_dataset(readings, os_hourly)
+                filename = f"tier3_ml_cumulative_validated_{formatted_date}.csv"
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(FULL_SCHEMA_COLUMNS)
+
+        for row in rows:
+            formatted_row = [sanitize_csv_cell(row.get(col, "")) for col in FULL_SCHEMA_COLUMNS]
+            writer.writerow(formatted_row)
+
+        output.seek(0)
+        return StreamingResponse(
+            content=iter([output.getvalue()]),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+
+    # 2. Legacy daily CSV fallback format (when tier is None)
     stmt = (
         select(RawReading)
         .where(and_(RawReading.observed_at >= start_utc, RawReading.observed_at < end_utc))
@@ -436,6 +485,19 @@ async def get_daily_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
+
+
+@router.get("/api/v1/hardware/tiered-csv/{tier_number}")
+async def get_tiered_csv(
+    tier_number: int,
+    date_str: Optional[str] = Query(None, description="Target date in YYYY-MM-DD format (PKT UTC+5). Defaults to yesterday in PKT."),
+    db: AsyncSession = Depends(get_db_session)
+):
+    """Streams specific tiered CSV (1: Hardware+Chemical, 2: Pure Open-Source, 3: ML Cumulative Validated)."""
+    if tier_number not in (1, 2, 3):
+        raise HTTPException(status_code=400, detail="Invalid tier number. Supported tiers are 1, 2, or 3.")
+    return await get_daily_csv(date_str=date_str, tier=tier_number, db=db)
+
 
 
 @router.get("/api/v1/hardware/open-source-mesh")

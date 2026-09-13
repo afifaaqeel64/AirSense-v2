@@ -186,9 +186,20 @@ async def query_daily_readings(start_utc: datetime, end_utc: datetime, max_retri
 async def async_generate_daily_backup(
     target_date: Optional[datetime.date] = None,
     output_dir: Optional[Path] = None,
-    send_telegram: bool = True
+    send_telegram: bool = True,
+    tier: str = "all"
 ) -> Dict[str, Any]:
-    """Asynchronously generates daily partitioned CSV backup and dispatches notification."""
+    """Asynchronously generates 3-tier partitioned CSV backups, cross-validation, and dispatches notification."""
+    import zipfile
+    from services.quality_control.three_tier_framework import (
+        fetch_verified_opensource_hourly,
+        build_tier1_dataset,
+        build_tier2_dataset,
+        build_tier3_dataset,
+        export_dataset_to_csv,
+        FULL_SCHEMA_COLUMNS
+    )
+
     pkt_tz = timezone(timedelta(hours=5))
     now_pkt = datetime.now(pkt_tz)
 
@@ -205,17 +216,37 @@ async def async_generate_daily_backup(
     start_utc = start_pkt.astimezone(timezone.utc)
     end_utc = end_pkt.astimezone(timezone.utc)
 
-    # Determine output path
+    # Determine output paths
     out_dir = output_dir or DEFAULT_BACKUP_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
+
     csv_file = out_dir / f"airsense_daily_{date_str_file}.csv"
+    tier1_file = out_dir / f"tier1_hardware_chemical_{date_str_file}.csv"
+    tier2_file = out_dir / f"tier2_opensource_pure_{date_str_file}.csv"
+    tier3_file = out_dir / f"tier3_ml_cumulative_validated_{date_str_file}.csv"
+    zip_file = out_dir / f"airsense_tiered_daily_{date_str_file}.zip"
 
     logger.info(f"Querying database for date {date_str_dash} (PKT) [{start_utc.isoformat()} to {end_utc.isoformat()} UTC]...")
     readings = await query_daily_readings(start_utc, end_utc)
     total_records = len(readings)
     logger.info(f"Retrieved {total_records} raw readings.")
 
-    # Write CSV
+    # 1. Fetch verified open-source physical & chemical atmospheric variables
+    logger.info(f"Fetching verified open-source atmospheric grid data for {date_str_dash}...")
+    os_hourly = await fetch_verified_opensource_hourly(target_date)
+
+    # 2. Build datasets for Tier 1, Tier 2, Tier 3
+    tier1_rows = build_tier1_dataset(readings, os_hourly) if total_records > 0 else []
+    tier2_rows = build_tier2_dataset(os_hourly)
+    tier3_rows = build_tier3_dataset(readings, os_hourly) if total_records > 0 else []
+
+    # Export Tiered CSV files
+    export_dataset_to_csv(tier1_rows, tier1_file)
+    export_dataset_to_csv(tier2_rows, tier2_file)
+    export_dataset_to_csv(tier3_rows, tier3_file)
+    logger.info(f"Tiered CSV files saved: {tier1_file.name}, {tier2_file.name}, {tier3_file.name}")
+
+    # 3. Export Legacy CSV (maintains 100% backward compatibility for existing consumers)
     with open(csv_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -265,9 +296,20 @@ async def async_generate_daily_backup(
                 sanitize_csv_cell(r.aqi)
             ])
 
-    logger.info(f"Daily backup CSV saved to: {csv_file}")
+    logger.info(f"Legacy backup CSV saved to: {csv_file}")
 
-    # Compute summaries
+    # 4. Package all tiered datasets into a single zip archive
+    try:
+        with zipfile.ZipFile(zip_file, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.write(tier1_file, arcname=tier1_file.name)
+            zf.write(tier2_file, arcname=tier2_file.name)
+            zf.write(tier3_file, arcname=tier3_file.name)
+            zf.write(csv_file, arcname=csv_file.name)
+        logger.info(f"Bundled tiered archive saved to: {zip_file}")
+    except Exception as e:
+        logger.warning(f"Could not package zip archive: {e}")
+
+    # 5. Compute summaries
     pm25_vals = [float(r.pm2_5) for r in readings if r.pm2_5 is not None]
     temp_vals = [float(r.temperature_c) for r in readings if r.temperature_c is not None]
     hum_vals = [float(r.humidity_pct) for r in readings if r.humidity_pct is not None]
@@ -277,24 +319,29 @@ async def async_generate_daily_backup(
     max_pm25 = max(pm25_vals) if pm25_vals else 0.0
     avg_temp = (sum(temp_vals) / len(temp_vals)) if temp_vals else 0.0
     avg_hum = (sum(hum_vals) / len(hum_vals)) if hum_vals else 0.0
+    valid_tier3_count = sum(1 for r in tier3_rows if r.get("is_valid"))
 
     caption = (
-        f"AirSense Pakistan - Daily Telemetry Backup\n"
+        f"AirSense Pakistan - 3-Tier Daily Snapshot\n"
         f"Date (PKT): {date_str_dash}\n"
-        f"Total Records: {total_records}\n"
+        f"Tier 1 (HW+Chem): {len(tier1_rows)} rows\n"
+        f"Tier 2 (OpenSource): {len(tier2_rows)} rows\n"
+        f"Tier 3 (ML Validated): {len(tier3_rows)} rows (Valid: {valid_tier3_count})\n"
         f"PM2.5: Avg {avg_pm25:.1f} μg/m³ (Min: {min_pm25:.1f}, Max: {max_pm25:.1f})\n"
-        f"Temperature: Avg {avg_temp:.1f}°C\n"
-        f"Humidity: Avg {avg_hum:.0f}%\n"
-        f"File: {csv_file.name}"
+        f"Temperature: Avg {avg_temp:.1f}°C | Humidity: Avg {avg_hum:.0f}%\n"
+        f"Primary Defining File: {tier3_file.name if total_records > 0 else csv_file.name}"
     )
 
     telegram_sent = False
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = os.environ.get("TELEGRAM_CHAT_ID")
 
+    # Delivery file: attach defining Tier 3 file if records exist, otherwise legacy CSV
+    delivery_file = tier3_file if total_records > 0 else csv_file
+
     if send_telegram and bot_token and chat_id:
         logger.info(f"[TELEGRAM] Initiating notification (Token length: {len(bot_token)}, Chat ID: {mask_secret(chat_id)})...")
-        telegram_sent = send_telegram_document(bot_token, chat_id, csv_file, caption)
+        telegram_sent = send_telegram_document(bot_token, chat_id, delivery_file, caption)
     else:
         logger.info(
             f"[INFO] Telegram delivery skipped: "
@@ -307,8 +354,18 @@ async def async_generate_daily_backup(
         "status": "success",
         "target_date": date_str_dash,
         "csv_path": str(csv_file),
+        "tier1_csv_path": str(tier1_file),
+        "tier2_csv_path": str(tier2_file),
+        "tier3_csv_path": str(tier3_file),
+        "zip_path": str(zip_file),
         "total_records": total_records,
         "telegram_sent": telegram_sent,
+        "tier_counts": {
+            "tier1": len(tier1_rows),
+            "tier2": len(tier2_rows),
+            "tier3": len(tier3_rows),
+            "valid_tier3": valid_tier3_count
+        },
         "summary": {
             "avg_pm25": avg_pm25,
             "min_pm25": min_pm25,
@@ -322,7 +379,8 @@ async def async_generate_daily_backup(
 def generate_daily_backup(
     target_date: Optional[datetime.date] = None,
     output_dir: Optional[Path] = None,
-    send_telegram: bool = True
+    send_telegram: bool = True,
+    tier: str = "all"
 ) -> Dict[str, Any]:
     """Generates daily partitioned CSV backup and dispatches notification, safely handling running event loops."""
     try:
@@ -333,17 +391,18 @@ def generate_daily_backup(
     if loop and loop.is_running():
         import concurrent.futures
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(lambda: asyncio.run(async_generate_daily_backup(target_date, output_dir, send_telegram)))
+            future = executor.submit(lambda: asyncio.run(async_generate_daily_backup(target_date, output_dir, send_telegram, tier=tier)))
             return future.result()
     else:
-        return asyncio.run(async_generate_daily_backup(target_date, output_dir, send_telegram))
+        return asyncio.run(async_generate_daily_backup(target_date, output_dir, send_telegram, tier=tier))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AirSense Daily Telemetry Backup & Telegram Exporter")
+    parser = argparse.ArgumentParser(description="AirSense 3-Tier Telemetry Backup & Telegram Exporter")
     parser.add_argument("--date", type=str, default=None, help="Target date YYYY-MM-DD (defaults to yesterday in PKT UTC+5)")
     parser.add_argument("--output-dir", type=str, default=None, help="Directory to save backup CSV")
     parser.add_argument("--db-url", type=str, default=None, help="Optional database connection URL override")
+    parser.add_argument("--tier", type=str, choices=["1", "2", "3", "all"], default="all", help="Specific tier to focus on (default: all)")
     parser.add_argument("--no-telegram", action="store_true", help="Disable Telegram dispatch")
     args = parser.parse_args()
 
@@ -359,7 +418,7 @@ def main():
             sys.exit(1)
 
     out_dir = Path(args.output_dir) if args.output_dir else None
-    res = generate_daily_backup(target_date=target_date, output_dir=out_dir, send_telegram=not args.no_telegram)
+    res = generate_daily_backup(target_date=target_date, output_dir=out_dir, send_telegram=not args.no_telegram, tier=args.tier)
     logger.info(f"Backup process finished with status: {res['status']}")
 
 

@@ -204,6 +204,7 @@ class TestTopicRoutingAndCollisionStress:
         stn_ready = threading.Event()
         khi_ready = threading.Event()
         isb_ready = threading.Event()
+        pub_ready = threading.Event()
 
         all_received = []
         stn_received = []
@@ -216,6 +217,7 @@ class TestTopicRoutingAndCollisionStress:
         sub_station_wild.on_connect = lambda c, u, f, rc, p=None: (c.subscribe("airsense/+/bic_roof/telemetry"), stn_ready.set())
         sub_exact_khi.on_connect = lambda c, u, f, rc, p=None: (c.subscribe("airsense/karachi/bic_roof/telemetry"), khi_ready.set())
         sub_exact_isb.on_connect = lambda c, u, f, rc, p=None: (c.subscribe("airsense/islamabad/bic_roof/telemetry"), isb_ready.set())
+        pub_client.on_connect = lambda c, u, f, rc, p=None: pub_ready.set()
 
         def make_collector(target_list):
             def on_msg(c, u, msg):
@@ -244,6 +246,7 @@ class TestTopicRoutingAndCollisionStress:
 
             pub_client.connect(HIVEMQ_HOST, MQTT_PORT, keepalive=30)
             pub_client.loop_start()
+            assert pub_ready.wait(timeout=12.0)
             time.sleep(0.5)
 
             # Publish 3 distinct messages to different topic levels
@@ -255,10 +258,17 @@ class TestTopicRoutingAndCollisionStress:
 
             for top, tag in topics_and_tags:
                 payload = {"stress_uuid": stress_uuid, "tag": tag, "timestamp": time.time()}
-                pub_client.publish(top, json.dumps(payload), qos=0)
+                pub_info = pub_client.publish(top, json.dumps(payload), qos=1)
+                try:
+                    pub_info.wait_for_publish(timeout=5.0)
+                except Exception:
+                    pass
                 time.sleep(0.1)
 
-            time.sleep(2.0)
+            for _ in range(40):
+                if len(all_received) >= 3:
+                    break
+                time.sleep(0.1)
 
             # Assertions:
             # 1. 'airsense/#' should capture all 3 messages
@@ -295,6 +305,7 @@ class TestTopicRoutingAndCollisionStress:
         pub_client = create_paho_v2_client("pub-isolate")
 
         khi_ready = threading.Event()
+        pub_ready = threading.Event()
         received = []
         stress_uuid = uuid.uuid4().hex
 
@@ -307,6 +318,7 @@ class TestTopicRoutingAndCollisionStress:
                 pass
         sub_khi.on_connect = lambda c, u, f, rc, p=None: (c.subscribe(PRIMARY_TOPIC), khi_ready.set())
         sub_khi.on_message = on_msg
+        pub_client.on_connect = lambda c, u, f, rc, p=None: pub_ready.set()
 
         try:
             sub_khi.connect(HIVEMQ_HOST, MQTT_PORT, keepalive=30)
@@ -315,6 +327,7 @@ class TestTopicRoutingAndCollisionStress:
 
             pub_client.connect(HIVEMQ_HOST, MQTT_PORT, keepalive=30)
             pub_client.loop_start()
+            assert pub_ready.wait(timeout=12.0)
             time.sleep(0.5)
 
             # Publish to unrelated topic prefixes
@@ -323,8 +336,12 @@ class TestTopicRoutingAndCollisionStress:
             time.sleep(1.0)
 
             # Now publish valid topic
-            pub_client.publish(PRIMARY_TOPIC, json.dumps({"stress_uuid": stress_uuid, "valid": True}))
-            for _ in range(30):
+            pub_info = pub_client.publish(PRIMARY_TOPIC, json.dumps({"stress_uuid": stress_uuid, "valid": True}), qos=1)
+            try:
+                pub_info.wait_for_publish(timeout=5.0)
+            except Exception:
+                pass
+            for _ in range(40):
                 if len(received) >= 1:
                     break
                 time.sleep(0.1)

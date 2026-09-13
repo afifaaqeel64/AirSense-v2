@@ -10,13 +10,17 @@ on:
         description: 'Target date to backup (YYYY-MM-DD, defaults to yesterday in PKT)'
         required: false
         default: ''
+      tier:
+        description: 'Dataset tier to generate: 1, 2, 3, or all'
+        required: false
+        default: 'all'
 
 permissions:
   contents: write
 
 jobs:
   daily-backup:
-    name: Generate & Sync Daily Telemetry Backup
+    name: Generate & Sync Daily 3-Tier Telemetry Backup
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -35,7 +39,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Generate Daily CSV & Deliver Telegram Notification
+      - name: Generate 3-Tier CSVs & Deliver Telegram Notification
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -44,17 +48,23 @@ jobs:
           if [ -z "$DATABASE_URL" ]; then
             unset DATABASE_URL
           fi
+          CMD="python scripts/generate_daily_backup_csv.py"
           if [ -n "${{ github.event.inputs.date }}" ]; then
-            python scripts/generate_daily_backup_csv.py --date "${{ github.event.inputs.date }}"
-          else
-            python scripts/generate_daily_backup_csv.py
+            CMD="$CMD --date ${{ github.event.inputs.date }}"
           fi
+          if [ -n "${{ github.event.inputs.tier }}" ]; then
+            CMD="$CMD --tier ${{ github.event.inputs.tier }}"
+          fi
+          echo "Executing: $CMD"
+          $CMD
 
-      - name: Upload Daily Backup CSV as Artifact
+      - name: Upload 3-Tier Backup CSVs & Archives as Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: airsense-daily-csv-backups
-          path: data/backups/daily_csv/*.csv
+          name: airsense-3tier-daily-backups
+          path: |
+            data/backups/daily_csv/*.csv
+            data/backups/daily_csv/*.zip
           if-no-files-found: warn
           retention-days: 90
 
@@ -66,6 +76,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "No new daily backup files to commit."
           else
-            git commit -m "chore(backup): automated 24/7 daily telemetry snapshot [skip ci]"
+            git commit -m "chore(backup): automated 24/7 3-tier telemetry snapshot [skip ci]"
             git push
           fi
