@@ -155,20 +155,28 @@ async def telegram_bot_webhook(request: Request, background_tasks: BackgroundTas
         send_telegram_text(bot_token, chat_id, status_text)
 
     elif cmd in ("/email", "/send_email", "/backup"):
-        req_date_str = cmd_parts[1] if len(cmd_parts) > 1 else None
         target_date = None
-        if req_date_str:
-            try:
-                target_date = datetime.strptime(req_date_str, "%Y-%m-%d").date()
-            except ValueError:
-                send_telegram_text(bot_token, chat_id, "⚠️ Invalid date format. Please use YYYY-MM-DD (e.g. `/email 2026-09-12`).")
-                return {"ok": True}
+        custom_emails = None
+        for part in cmd_parts[1:]:
+            if "@" in part:
+                custom_emails = part
+            else:
+                try:
+                    target_date = datetime.strptime(part, "%Y-%m-%d").date()
+                except ValueError:
+                    send_telegram_text(
+                        bot_token,
+                        chat_id,
+                        f"⚠️ Unrecognized parameter '{part}'. Please use YYYY-MM-DD or recipient email(s) (e.g. `/email 2026-09-12` or `/email user1@domain.com,user2@domain.com`)."
+                    )
+                    return {"ok": True}
 
         target_display = target_date.strftime("%Y-%m-%d") if target_date else "yesterday"
+        dest_notice = f" to {custom_emails}" if custom_emails else ""
         send_telegram_text(
             bot_token,
             chat_id,
-            f"⏳ Generating 3-tier telemetry files for {target_display} and preparing dual delivery (Telegram + Email)..."
+            f"⏳ Generating 3-tier telemetry files for {target_display} and preparing dual delivery (Telegram + Email{dest_notice})..."
         )
 
         # Run dispatch in background task to respond to Telegram immediately (<2s)
@@ -177,6 +185,7 @@ async def telegram_bot_webhook(request: Request, background_tasks: BackgroundTas
             target_date=target_date,
             send_telegram=True,
             send_email=True,
+            email_to=custom_emails,
             tier="all"
         )
 

@@ -57,18 +57,18 @@ jobs:
           if [ -z "$DATABASE_URL" ]; then
             unset DATABASE_URL
           fi
-          CMD="python scripts/generate_daily_backup_csv.py"
+          ARGS=()
           if [ -n "${{ github.event.inputs.date }}" ]; then
-            CMD="$CMD --date ${{ github.event.inputs.date }}"
+            ARGS+=(--date "${{ github.event.inputs.date }}")
           fi
           if [ -n "${{ github.event.inputs.tier }}" ]; then
-            CMD="$CMD --tier ${{ github.event.inputs.tier }}"
+            ARGS+=(--tier "${{ github.event.inputs.tier }}")
           fi
           if [ -n "${{ github.event.inputs.email_to }}" ]; then
-            CMD="$CMD --email-to '${{ github.event.inputs.email_to }}'"
+            ARGS+=(--email-to "${{ github.event.inputs.email_to }}")
           fi
-          echo "Executing: $CMD"
-          $CMD
+          echo "Executing: python scripts/generate_daily_backup_csv.py ${ARGS[*]}"
+          python scripts/generate_daily_backup_csv.py "${ARGS[@]}"
 
       - name: Upload 3-Tier Backup CSVs & Archives as Artifacts
         uses: actions/upload-artifact@v4

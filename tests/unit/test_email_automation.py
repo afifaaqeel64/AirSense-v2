@@ -342,3 +342,16 @@ async def test_telegram_webhook_commands():
             res3 = await client.post("/api/v1/telegram/webhook", json=payload_email)
             assert res3.status_code == 200
             assert res3.json()["ok"] is True
+
+            # 4. /email command with multiple recipient emails and custom date
+            payload_multi_email = {
+                "update_id": 10004,
+                "message": {
+                    "message_id": 4,
+                    "chat": {"id": 123456789},
+                    "text": "/email 2026-09-12 user1@domain.com,user2@domain.com,user3@test.org"
+                }
+            }
+            res4 = await client.post("/api/v1/telegram/webhook", json=payload_multi_email)
+            assert res4.status_code == 200
+            assert res4.json()["ok"] is True
