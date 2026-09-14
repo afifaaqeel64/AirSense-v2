@@ -151,6 +151,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.responses import JSONResponse
+import traceback
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    print(f"[AirSense 500 Error]: {exc}\n{tb}", flush=True)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error_type": type(exc).__name__, "error": str(exc), "traceback": tb}
+    )
+
 # Register Phase 4 & Phase 5 Routers
 app.include_router(admin_router)
 app.include_router(ingest_router)
