@@ -9,6 +9,8 @@ hybrid school directives, and affected districts.
 Saves all documents and extracted metadata strictly to D: drive Ops Lake.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import re
@@ -23,7 +25,10 @@ try:
 except (ImportError, Exception):
     fitz = None
 
-import numpy as np
+try:
+    import numpy as np
+except (ImportError, Exception):
+    np = None
 
 try:
     import cv2

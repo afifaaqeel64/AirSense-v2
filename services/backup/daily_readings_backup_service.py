@@ -10,6 +10,8 @@ and partitioned archiving of three dedicated datasets on the D: drive:
 Enforces strict D: drive sovereignty (zero writes to C:).
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import json
@@ -17,8 +19,13 @@ import hashlib
 import math
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional, Tuple
-import pandas as pd
-import numpy as np
+
+try:
+    import pandas as pd
+    import numpy as np
+except (ImportError, Exception):
+    pd = None
+    np = None
 
 # Ensure project root in sys.path
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))

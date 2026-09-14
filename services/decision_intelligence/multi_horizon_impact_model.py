@@ -6,16 +6,28 @@ Features dynamic tightening confidence intervals and dual financial/sentiment lo
 Artifacts strictly persisted on D: drive.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import json
-import joblib
-import numpy as np
-import pandas as pd
-import lightgbm as lgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_absolute_error
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, List, Optional
+
+try:
+    import joblib
+    import numpy as np
+    import pandas as pd
+    import lightgbm as lgb
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import r2_score, mean_absolute_error
+    HAS_ML_DEPS = True
+except (ImportError, Exception):
+    joblib = None
+    np = None
+    pd = None
+    lgb = None
+    HAS_ML_DEPS = False
 
 # Ensure project root in sys.path
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -49,7 +61,7 @@ class MultiHorizonImpactModel:
         self._load_if_exists()
 
     def _load_if_exists(self):
-        if os.path.exists(self.MODEL_ARTIFACT_PATH):
+        if joblib is not None and os.path.exists(self.MODEL_ARTIFACT_PATH):
             try:
                 bundle = joblib.load(self.MODEL_ARTIFACT_PATH)
                 self.models = bundle.get("models", {})
@@ -217,7 +229,7 @@ class MultiHorizonImpactModel:
 
         synoptic_shock_factor = (1.65 if effective_base_pm2_5 > 150 else 1.25) * pressure_factor
 
-        now_utc = pd.Timestamp.now(tz="UTC")
+        now_utc = datetime.now(timezone.utc)
         has_models = bool(
             self.models and all(
                 k in self.models for k in ["enforcement_prob", "unmitigated_loss", "mitigated_savings", "sentiment_disruption"]
@@ -227,7 +239,7 @@ class MultiHorizonImpactModel:
         for day in range(10, 0, -1):
             lead_h = day * 24
             progress = (10 - day) / 9.0  # 0.0 at Day 10 to 1.0 at Day 1
-            target_date = (now_utc + pd.Timedelta(days=day)).strftime("%Y-%m-%d")
+            target_date = (now_utc + timedelta(days=day)).strftime("%Y-%m-%d")
 
             # Day-by-day progression
             proj_pm = round(float(effective_base_pm2_5 * (1.0 + (progress ** 1.2) * (synoptic_shock_factor - 1.0))), 1)
