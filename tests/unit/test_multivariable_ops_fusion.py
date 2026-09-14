@@ -439,6 +439,7 @@ async def test_agentphone_dispatch_execution_and_ledger_persistence():
 # 5. Storage Sovereignty & Drive Isolation Verification
 # ============================================================================
 
+@pytest.mark.skipif(not os.path.exists("D:/"), reason="Physical D: drive not mounted on host machine")
 def test_storage_sovereignty_zero_c_drive_writes():
     """Assert all operational data paths, models, lakes, and logs reside strictly on D: drive."""
     pipeline = OpsImpactPipeline()
