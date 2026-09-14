@@ -15,8 +15,8 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-# Production Cloud Database Configuration (Supabase PostgreSQL)
-SUPABASE_CLOUD_URL = "postgresql+asyncpg://postgres.vppczkvawiaptiygrqhx:7EZgyMcqYi%269qUE@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+# Production Cloud Database Configuration (Supabase PostgreSQL via Port 6543 Transaction Pooler)
+SUPABASE_CLOUD_URL = "postgresql+asyncpg://postgres.vppczkvawiaptiygrqhx:7EZgyMcqYi%269qUE@aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres"
 
 # When executing in Vercel Serverless, guarantee connection to persistent Supabase cloud database.
 # Ephemeral /tmp SQLite resets on every serverless hibernation, destroying background telemetry history.
@@ -67,70 +67,16 @@ class VercelPathNormalizer:
     async def _ensure_db(self):
         if self._db_ready:
             return
-        try:
-            from apps.api.db.session import engine, Base
-            from apps.api.db.models import Campus, Station, Device
-            from apps.api.core.config import settings
-            from sqlalchemy.ext.asyncio import AsyncSession
-            from sqlalchemy import select
-            from apps.api.core.security import hash_token
+        self._db_ready = True
+        # If using SQLite fallback, ensure local tables exist
+        if "sqlite" in (os.environ.get("DATABASE_URL") or ""):
+            try:
+                from apps.api.db.session import engine, Base
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+            except Exception as e:
+                print(f"[Vercel SQLite Init Error]: {e}", flush=True)
 
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-
-            async with engine.connect() as conn:
-                async with AsyncSession(conn) as session:
-                    # Karachi Campus
-                    res_khi = await session.execute(select(Campus).where(Campus.code == settings.KARACHI_CAMPUS_CODE))
-                    khi = res_khi.scalar_one_or_none()
-                    if not khi:
-                        khi = Campus(
-                            code=settings.KARACHI_CAMPUS_CODE,
-                            name=settings.KARACHI_CAMPUS_NAME,
-                            city="Karachi",
-                            contact_name=settings.KARACHI_CONTACT_NAME,
-                            latitude=settings.KARACHI_LATITUDE,
-                            longitude=settings.KARACHI_LONGITUDE,
-                            status="active"
-                        )
-                        session.add(khi)
-                        await session.flush()
-
-                    # Karachi Station
-                    res_st = await session.execute(select(Station).where(Station.station_code == "BIC-KHI-ROOF-01"))
-                    st_khi = res_st.scalar_one_or_none()
-                    if not st_khi and khi:
-                        st_khi = Station(
-                            campus_id=khi.id,
-                            station_code="BIC-KHI-ROOF-01",
-                            station_name="Karachi BIC Rooftop Station",
-                            installation_location="BIC Rooftop",
-                            latitude=settings.KARACHI_LATITUDE,
-                            longitude=settings.KARACHI_LONGITUDE,
-                            status="active"
-                        )
-                        session.add(st_khi)
-                        await session.flush()
-
-                    # Registered ESP32 Device
-                    dev_token = "airsense_dev_token_khi_01"
-                    dev_hash = hash_token(dev_token)
-                    res_dev = await session.execute(select(Device).where(Device.device_uid == "AIRSENSE-NODE-KHI-01"))
-                    dev = res_dev.scalar_one_or_none()
-                    if not dev and st_khi:
-                        dev = Device(
-                            station_id=st_khi.id,
-                            device_uid="AIRSENSE-NODE-KHI-01",
-                            token_hash=dev_hash,
-                            firmware_version="v3.5.0-PROD",
-                            status="active"
-                        )
-                        session.add(dev)
-                    await session.commit()
-        except Exception as e:
-            print(f"[Vercel DB Init Error]: {e}", flush=True)
-        finally:
-            self._db_ready = True
 
     async def __call__(self, scope, receive, send):
         if scope.get("type") == "http":

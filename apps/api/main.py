@@ -44,90 +44,92 @@ from apps.api.routers.backup_router import router as backup_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Database initialization and campus bootstrap startup tasks."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if not os.environ.get("VERCEL"):
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
-    # Seed initial campus records if they do not exist
-    async with engine.connect() as conn:
-        async with AsyncSession(conn) as session:
-            # Islamabad
-            result_isb = await session.execute(select(Campus).where(Campus.code == settings.ISLAMABAD_CAMPUS_CODE))
-            isb = result_isb.scalar_one_or_none()
-            if not isb:
-                isb_status = "active" if settings.is_islamabad_configured() else "configuration_required"
-                isb = Campus(
-                    code=settings.ISLAMABAD_CAMPUS_CODE,
-                    name=settings.ISLAMABAD_CAMPUS_NAME,
-                    city="Islamabad",
-                    contact_name=settings.ISLAMABAD_CONTACT_NAME,
-                    latitude=settings.ISLAMABAD_LATITUDE,
-                    longitude=settings.ISLAMABAD_LONGITUDE,
-                    status=isb_status
-                )
-                session.add(isb)
+        # Seed initial campus records if they do not exist
+        async with engine.connect() as conn:
+            async with AsyncSession(conn) as session:
+                # Islamabad
+                result_isb = await session.execute(select(Campus).where(Campus.code == settings.ISLAMABAD_CAMPUS_CODE))
+                isb = result_isb.scalar_one_or_none()
+                if not isb:
+                    isb_status = "active" if settings.is_islamabad_configured() else "configuration_required"
+                    isb = Campus(
+                        code=settings.ISLAMABAD_CAMPUS_CODE,
+                        name=settings.ISLAMABAD_CAMPUS_NAME,
+                        city="Islamabad",
+                        contact_name=settings.ISLAMABAD_CONTACT_NAME,
+                        latitude=settings.ISLAMABAD_LATITUDE,
+                        longitude=settings.ISLAMABAD_LONGITUDE,
+                        status=isb_status
+                    )
+                    session.add(isb)
 
-            # Karachi
-            result_khi = await session.execute(select(Campus).where(Campus.code == settings.KARACHI_CAMPUS_CODE))
-            khi = result_khi.scalar_one_or_none()
-            if not khi:
-                khi_status = "active" if settings.is_karachi_configured() else "configuration_required"
-                khi = Campus(
-                    code=settings.KARACHI_CAMPUS_CODE,
-                    name=settings.KARACHI_CAMPUS_NAME,
-                    city="Karachi",
-                    contact_name=settings.KARACHI_CONTACT_NAME,
-                    latitude=settings.KARACHI_LATITUDE,
-                    longitude=settings.KARACHI_LONGITUDE,
-                    status=khi_status
-                )
-                session.add(khi)
-                await session.flush()
+                # Karachi
+                result_khi = await session.execute(select(Campus).where(Campus.code == settings.KARACHI_CAMPUS_CODE))
+                khi = result_khi.scalar_one_or_none()
+                if not khi:
+                    khi_status = "active" if settings.is_karachi_configured() else "configuration_required"
+                    khi = Campus(
+                        code=settings.KARACHI_CAMPUS_CODE,
+                        name=settings.KARACHI_CAMPUS_NAME,
+                        city="Karachi",
+                        contact_name=settings.KARACHI_CONTACT_NAME,
+                        latitude=settings.KARACHI_LATITUDE,
+                        longitude=settings.KARACHI_LONGITUDE,
+                        status=khi_status
+                    )
+                    session.add(khi)
+                    await session.flush()
 
-            # Default Station for Karachi
-            result_st = await session.execute(select(Station).where(Station.station_code == "BIC-KHI-ROOF-01"))
-            st_khi = result_st.scalar_one_or_none()
-            if not st_khi and khi:
-                st_khi = Station(
-                    campus_id=khi.id,
-                    station_code="BIC-KHI-ROOF-01",
-                    station_name="Karachi BIC Rooftop Station",
-                    installation_location="BIC Rooftop",
-                    latitude=settings.KARACHI_LATITUDE,
-                    longitude=settings.KARACHI_LONGITUDE,
-                    status="active"
-                )
-                session.add(st_khi)
-                await session.flush()
+                # Default Station for Karachi
+                result_st = await session.execute(select(Station).where(Station.station_code == "BIC-KHI-ROOF-01"))
+                st_khi = result_st.scalar_one_or_none()
+                if not st_khi and khi:
+                    st_khi = Station(
+                        campus_id=khi.id,
+                        station_code="BIC-KHI-ROOF-01",
+                        station_name="Karachi BIC Rooftop Station",
+                        installation_location="BIC Rooftop",
+                        latitude=settings.KARACHI_LATITUDE,
+                        longitude=settings.KARACHI_LONGITUDE,
+                        status="active"
+                    )
+                    session.add(st_khi)
+                    await session.flush()
 
-            # Default Registered ESP32 Device
-            from apps.api.core.security import hash_token
-            dev_token = "airsense_dev_token_khi_01"
-            dev_hash = hash_token(dev_token)
-            result_dev = await session.execute(select(Device).where(Device.device_uid == "AIRSENSE-NODE-KHI-01"))
-            dev = result_dev.scalar_one_or_none()
-            if not dev and st_khi:
-                dev = Device(
-                    station_id=st_khi.id,
-                    device_uid="AIRSENSE-NODE-KHI-01",
-                    token_hash=dev_hash,
-                    firmware_version="v3.5.0-PROD",
-                    status="active"
-                )
-                session.add(dev)
+                # Default Registered ESP32 Device
+                from apps.api.core.security import hash_token
+                dev_token = "airsense_dev_token_khi_01"
+                dev_hash = hash_token(dev_token)
+                result_dev = await session.execute(select(Device).where(Device.device_uid == "AIRSENSE-NODE-KHI-01"))
+                dev = result_dev.scalar_one_or_none()
+                if not dev and st_khi:
+                    dev = Device(
+                        station_id=st_khi.id,
+                        device_uid="AIRSENSE-NODE-KHI-01",
+                        token_hash=dev_hash,
+                        firmware_version="v3.5.0-PROD",
+                        status="active"
+                    )
+                    session.add(dev)
 
-            await session.commit()
+                await session.commit()
 
-    # Start 24/7 autonomous background engine
-    if getattr(settings, "BACKGROUND_SCHEDULER_ENABLED", True):
-        from services.background_scheduler import BackgroundScheduler
-        await BackgroundScheduler.get_instance().start()
+        # Start 24/7 autonomous background engine in non-serverless mode
+        if getattr(settings, "BACKGROUND_SCHEDULER_ENABLED", True):
+            from services.background_scheduler import BackgroundScheduler
+            await BackgroundScheduler.get_instance().start()
 
     yield
 
     # Clean shutdown of background tasks
-    if getattr(settings, "BACKGROUND_SCHEDULER_ENABLED", True):
+    if not os.environ.get("VERCEL") and getattr(settings, "BACKGROUND_SCHEDULER_ENABLED", True):
         from services.background_scheduler import BackgroundScheduler
         await BackgroundScheduler.get_instance().stop()
+
 
 
 app = FastAPI(
