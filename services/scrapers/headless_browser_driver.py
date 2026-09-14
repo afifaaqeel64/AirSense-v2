@@ -16,7 +16,13 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple
 
-from PIL import Image, ImageDraw, ImageFont
+try:
+    from PIL import Image, ImageDraw, ImageFont
+except (ImportError, Exception):
+    Image = None
+    ImageDraw = None
+    ImageFont = None
+
 
 # Ensure project root in sys.path
 BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -87,6 +93,15 @@ class HeadlessBrowserDriver:
         Punjab gazette styling, government stamp, timestamp watermark, and cryptographic hash.
         Guarantees legal proof-of-record even during portal offline periods.
         """
+        if Image is None or ImageDraw is None:
+            try:
+                os.makedirs(os.path.dirname(output_png_path), exist_ok=True)
+                with open(output_png_path.replace(".png", ".txt"), "w", encoding="utf-8") as f:
+                    f.write(f"PAGE CAPTURE: {page_title}\n{notice_text}")
+            except Exception:
+                pass
+            return
+
         width = 1920
         height = 1080
         img = Image.new("RGB", (width, height), color=(248, 249, 250))

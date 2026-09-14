@@ -23,32 +23,49 @@ class OpsDataLakeManager:
         "business_journalism"
     ]
 
-    def __init__(self, base_path: str = "./data/ops"):
+    def __init__(self, base_path: Optional[str] = None):
+        if base_path is None:
+            if os.environ.get("VERCEL"):
+                base_path = "/tmp/data/ops"
+            else:
+                base_path = "./data/ops"
         self.base_path = os.path.abspath(base_path).replace("\\", "/")
         self._verify_d_drive_enforcement()
 
-        # Isolate system temporary directory and cache strictly to D: drive
-        self.cache_dir = "./data/cache"
-        self.tmp_dir = "./data/ops_db/tmp"
-        os.makedirs(self.cache_dir, exist_ok=True)
-        os.makedirs(self.tmp_dir, exist_ok=True)
-        tempfile.tempdir = self.tmp_dir
-        os.environ["TEMP"] = self.tmp_dir
-        os.environ["TMP"] = self.tmp_dir
-        os.environ["TMPDIR"] = self.tmp_dir
+        # Isolate system temporary directory and cache
+        if os.environ.get("VERCEL"):
+            self.cache_dir = "/tmp/data/cache"
+            self.tmp_dir = "/tmp/data/ops_db/tmp"
+            self.ops_db = "/tmp/data/ops_db"
+        else:
+            self.cache_dir = "./data/cache"
+            self.tmp_dir = "./data/ops_db/tmp"
+            self.ops_db = "./data/ops_db"
+
+        try:
+            os.makedirs(self.cache_dir, exist_ok=True)
+            os.makedirs(self.tmp_dir, exist_ok=True)
+            tempfile.tempdir = self.tmp_dir
+            os.environ["TEMP"] = self.tmp_dir
+            os.environ["TMP"] = self.tmp_dir
+            os.environ["TMPDIR"] = self.tmp_dir
+        except Exception:
+            pass
 
         self.weather_lake = os.path.join(self.base_path, "weather_lake").replace("\\", "/")
         self.policy_lake = os.path.join(self.base_path, "policy_lake").replace("\\", "/")
         self.impact_lake = os.path.join(self.base_path, "impact_lake").replace("\\", "/")
         self.horizon_10day_lake = os.path.join(self.base_path, "10day_horizon_lake").replace("\\", "/")
         
-        self.ops_db = "./data/ops_db"
         self.scraped_raw_root = os.path.join(self.ops_db, "scraped_raw").replace("\\", "/")
         self.normalized_root = os.path.join(self.ops_db, "normalized_lake").replace("\\", "/")
         self.visual_audits_root = os.path.join(self.ops_db, "visual_audits").replace("\\", "/")
         self.circulars_ocr_root = os.path.join(self.ops_db, "circulars_ocr").replace("\\", "/")
 
-        self._ensure_all_directories()
+        try:
+            self._ensure_all_directories()
+        except Exception:
+            pass
 
     def _verify_d_drive_enforcement(self):
         """Hard assertion ensuring paths start with D: drive."""
@@ -62,7 +79,7 @@ class OpsDataLakeManager:
             raise PermissionError(f"CRITICAL FAULT: Storage path '{path}' violates D: drive isolation constraint!")
 
     def _ensure_all_directories(self):
-        """Pre-allocates all lake and domain-specific subdirectories on D: drive."""
+        """Pre-allocates all lake and domain-specific subdirectories."""
         core_dirs = [
             self.weather_lake,
             self.policy_lake,
@@ -76,12 +93,19 @@ class OpsDataLakeManager:
             self.tmp_dir
         ]
         for d in core_dirs:
-            os.makedirs(d, exist_ok=True)
+            try:
+                os.makedirs(d, exist_ok=True)
+            except Exception:
+                pass
 
         for domain in self.DOMAINS:
-            os.makedirs(os.path.join(self.scraped_raw_root, domain), exist_ok=True)
-            os.makedirs(os.path.join(self.normalized_root, domain), exist_ok=True)
-            os.makedirs(os.path.join(self.visual_audits_root, domain), exist_ok=True)
+            try:
+                os.makedirs(os.path.join(self.scraped_raw_root, domain), exist_ok=True)
+                os.makedirs(os.path.join(self.normalized_root, domain), exist_ok=True)
+                os.makedirs(os.path.join(self.visual_audits_root, domain), exist_ok=True)
+            except Exception:
+                pass
+
 
     def _compute_hash(self, content: str) -> str:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]

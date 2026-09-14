@@ -19,9 +19,17 @@ logger = logging.getLogger("airsense.telephony")
 AGENTPHONE_API_BASE = os.environ.get("AGENTPHONE_API_BASE", "https://api.agentphone.to/v1")
 AGENTPHONE_API_KEY = os.environ.get("AGENTPHONE_API_KEY", "")
 
-# Directory on D: drive for telephony logs to guarantee zero writes to C:
-TELEPHONY_LOG_DIR = os.path.join(".", "data", "ops_db", "telephony_logs")
-os.makedirs(TELEPHONY_LOG_DIR, exist_ok=True)
+# Directory for telephony logs with serverless environment safety
+if os.environ.get("VERCEL"):
+    TELEPHONY_LOG_DIR = "/tmp/data/ops_db/telephony_logs"
+else:
+    TELEPHONY_LOG_DIR = os.path.join(".", "data", "ops_db", "telephony_logs")
+
+try:
+    os.makedirs(TELEPHONY_LOG_DIR, exist_ok=True)
+except Exception:
+    pass
+
 EVENTS_LOG_FILE = os.path.join(TELEPHONY_LOG_DIR, "telephony_dispatches.jsonl")
 
 # Bilingual operational scripts across 4 sovereign personas (English, Urdu اردو, Roman Urdu)
