@@ -426,3 +426,47 @@ def test_automated_backup_multi_tier_generation_and_zip(tmp_path):
         assert any("tier2_opensource_pure" in n for n in names)
         assert any("tier3_ml_cumulative_validated" in n for n in names)
         assert any("airsense_daily" in n for n in names)
+
+
+def test_tier2_24_7_continuous_minute_series_1440_records():
+    """Verifies that Tier 2 open-source dataset generates exactly 1,440 continuous minute readings per 24-hour day."""
+    target_date = date(2026, 9, 14)
+    os_hourly = synthesize_climatological_hourly_series(target_date)
+
+    # 1. Hourly baseline (24 rows)
+    t2_hourly = build_tier2_dataset(os_hourly, expand_to_minute=False)
+    assert len(t2_hourly) == 24
+
+    # 2. 24/7-365 Continuous Minute Stream (1,440 rows)
+    t2_minute = build_tier2_dataset(os_hourly, expand_to_minute=True)
+    assert len(t2_minute) == 1440
+
+    # Verify sequential minute continuity without any skips
+    for idx, r in enumerate(t2_minute):
+        assert r["sequence_number"] == idx + 1
+        assert "observed_at_utc" in r
+        assert "observed_at_pk" in r
+        assert r["station_id"] == "EXT-OPEN-METEO-KHI"
+        assert r["device_uid"] == "OPENSOURCE_API_GRID"
+        assert "TIER2_OPENSOURCE_PURE" in r["qc_flags"]
+        assert len(r["content_hash"]) == 64
+        for col in TARGETED_VARIABLES:
+            assert col in r
+
+        # Check consecutive 1-minute delta
+        if idx < len(t2_minute) - 1:
+            curr_dt = datetime.fromisoformat(r["observed_at_utc"].replace("Z", "+00:00"))
+            next_dt = datetime.fromisoformat(t2_minute[idx + 1]["observed_at_utc"].replace("Z", "+00:00"))
+            assert (next_dt - curr_dt).total_seconds() == 60
+
+
+@pytest.mark.asyncio
+async def test_weather_telemetry_feed_endpoint_up_to_1440_limit():
+    """Verifies that /api/v1/providers/weather/telemetry-feed supports full 24-hour query limits up to 1440."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        resp = await ac.get("/api/v1/providers/weather/telemetry-feed?limit=1440")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["records"]) == 1440
+        assert data["records"][0]["minute_slot"] > data["records"][-1]["minute_slot"]

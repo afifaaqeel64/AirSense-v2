@@ -101,14 +101,93 @@ class BackgroundScheduler:
         while self._running:
             try:
                 from apps.api.routers.provider_router import ensure_open_source_minute_records
-                await ensure_open_source_minute_records(
+                records = await ensure_open_source_minute_records(
                     latitude=24.8607,
                     longitude=67.0011,
-                    limit=30,
+                    limit=60,
                     force_refresh=True
                 )
                 self._stats["minute_weather_ticks"] += 1
                 self._stats["last_minute_tick"] = datetime.now(timezone.utc).isoformat()
+
+                if records:
+                    latest = records[0]
+                    try:
+                        from apps.api.db.session import async_session_maker
+                        from apps.api.db.models import RawReading, Campus, Station
+                        from sqlalchemy import select, and_
+                        import uuid
+
+                        slot_str = latest.get("minute_slot")
+                        if slot_str:
+                            obs_dt = datetime.strptime(slot_str, "%Y-%m-%dT%H:%M").replace(tzinfo=timezone.utc)
+                        else:
+                            obs_dt = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+
+                        async with async_session_maker() as session:
+                            stn_code = "EXT-OPEN-METEO-KHI"
+                            stn_res = await session.execute(select(Station).where(Station.station_code == stn_code))
+                            stn = stn_res.scalar_one_or_none()
+                            if not stn:
+                                cmp_res = await session.execute(select(Campus).where(Campus.code == "KARACHI"))
+                                cmp = cmp_res.scalar_one_or_none()
+                                if not cmp:
+                                    cmp = Campus(
+                                        id=str(uuid.uuid4()),
+                                        code="KARACHI",
+                                        name="Karachi Campus",
+                                        city="Karachi",
+                                        contact_name="Operations Lead",
+                                        latitude=24.8607,
+                                        longitude=67.0011,
+                                        status="active"
+                                    )
+                                    session.add(cmp)
+                                    await session.flush()
+                                stn = Station(
+                                    id=str(uuid.uuid4()),
+                                    campus_id=cmp.id,
+                                    station_code=stn_code,
+                                    station_name="Karachi Open-Source Grid Monitor",
+                                    installation_location="Virtual Atmospheric Monitor",
+                                    latitude=24.8607,
+                                    longitude=67.0011,
+                                    status="active"
+                                )
+                                session.add(stn)
+                                await session.flush()
+
+                            exists_res = await session.execute(
+                                select(RawReading.id).where(
+                                    and_(
+                                        RawReading.station_id == stn.id,
+                                        RawReading.observed_at == obs_dt,
+                                        RawReading.source == "open_meteo"
+                                    )
+                                )
+                            )
+                            if not exists_res.scalar_one_or_none():
+                                raw_rec = RawReading(
+                                    id=str(uuid.uuid4()),
+                                    campus_id=stn.campus_id,
+                                    station_id=stn.id,
+                                    device_id="OPENSOURCE_API_GRID",
+                                    observed_at=obs_dt,
+                                    source="open_meteo",
+                                    source_timestamp_original=latest.get("timestamp_pkt"),
+                                    pm1=float(latest.get("pm1") or 0.0),
+                                    pm2_5=float(latest.get("pm25") or 0.0),
+                                    pm10=float(latest.get("pm10") or 0.0),
+                                    temperature_c=float(latest.get("temp") or 0.0),
+                                    humidity_pct=float(latest.get("hum") or 0.0),
+                                    pressure_hpa=float(latest.get("press") or 0.0),
+                                    rain_flag=bool(float(latest.get("rain") or 0.0) > 0.0),
+                                    wind_speed_m_s=round(float(latest.get("wind") or 0.0) / 3.6, 2)
+                                )
+                                session.add(raw_rec)
+                                await session.commit()
+                    except Exception as db_err:
+                        logger.debug(f"Open-source DB logging notice: {db_err}")
             except asyncio.CancelledError:
                 break
             except Exception as e:

@@ -32,11 +32,9 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-# Ensure base backup directory uses /tmp on Vercel, D: if available, otherwise project-local ./data/backups/daily
+# Ensure base backup directory uses /tmp on Vercel, otherwise project-local ./data/backups/daily
 if os.environ.get("VERCEL"):
     DAILY_BACKUP_BASE_DIR = "/tmp/data/backups/daily"
-elif os.path.exists("D:/"):
-    DAILY_BACKUP_BASE_DIR = "D:/MUNIM - UOE @BIC/AirSense/data/backups/daily"
 else:
     DAILY_BACKUP_BASE_DIR = os.path.abspath(os.path.join(BASE_DIR, "data", "backups", "daily")).replace("\\", "/")
 
@@ -111,17 +109,10 @@ class DailyReadingsBackupService:
 
     def __init__(self, base_dir: str = DAILY_BACKUP_BASE_DIR):
         self.base_dir = os.path.abspath(base_dir).replace("\\", "/")
-        self._assert_d_drive(self.base_dir)
         try:
             os.makedirs(self.base_dir, exist_ok=True)
         except Exception:
             pass
-
-
-    def _assert_d_drive(self, path: str):
-        norm = os.path.abspath(path).replace("\\", "/")
-        if False:
-            raise PermissionError(f"CRITICAL FAULT: Storage path '{path}' violates D: drive isolation constraint!")
 
     def _compute_sha256(self, filepath: str) -> str:
         h = hashlib.sha256()
@@ -466,7 +457,6 @@ class DailyReadingsBackupService:
             date_str = (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d")
 
         partition_dir = os.path.join(self.base_dir, date_str).replace("\\", "/")
-        self._assert_d_drive(partition_dir)
         try:
             os.makedirs(partition_dir, exist_ok=True)
         except Exception:
@@ -543,9 +533,7 @@ class DailyReadingsBackupService:
             "target_variables": ALL_TARGET_VARIABLES,
             "partition_directory": partition_dir,
             "datasets": manifest_entries,
-            "storage_sovereignty": {
-                "d_drive_enforced": True,
-                "zero_c_drive_writes": True,
+            "storage_metadata": {
                 "root_path": partition_dir
             }
         }
@@ -557,7 +545,7 @@ class DailyReadingsBackupService:
         return manifest
 
     def list_daily_backups(self) -> List[Dict[str, Any]]:
-        """Scans the D: drive daily backup directory and returns all indexed days."""
+        """Scans the daily backup directory and returns all indexed days."""
         backups = []
         if not os.path.exists(self.base_dir):
             return backups

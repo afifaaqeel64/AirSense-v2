@@ -311,8 +311,8 @@ async def ensure_open_source_minute_records(
 
         delta_minutes = int((now_utc - latest_dt).total_seconds() // 60)
 
-        if delta_minutes >= 60:
-            # Over 1 hour has elapsed (hibernation / restart); reseed contiguous window ending at now_utc
+        if delta_minutes >= 1440:
+            # Over 24 hours have elapsed (hibernation / restart); reseed contiguous window ending at now_utc
             _OPEN_SOURCE_MINUTE_HISTORY = []
             for i in range(target_seed_count):
                 t_offset = now_utc - timedelta(minutes=i)
@@ -399,9 +399,9 @@ async def ensure_open_source_minute_records(
     deduped.sort(key=lambda x: x["minute_slot"], reverse=True)
     _OPEN_SOURCE_MINUTE_HISTORY = deduped
 
-    # Keep at most 120 rolling minutes
-    if len(_OPEN_SOURCE_MINUTE_HISTORY) > 120:
-        _OPEN_SOURCE_MINUTE_HISTORY = _OPEN_SOURCE_MINUTE_HISTORY[:120]
+    # Keep at most 1440 rolling minutes (full 24-hour continuous buffer)
+    if len(_OPEN_SOURCE_MINUTE_HISTORY) > 1440:
+        _OPEN_SOURCE_MINUTE_HISTORY = _OPEN_SOURCE_MINUTE_HISTORY[:1440]
 
     # --- GAPLESS AUDIT PASS ---
     # Guarantee that consecutive records in the returned slice have exactly 1-minute delta
@@ -476,13 +476,13 @@ async def ensure_open_source_minute_records(
         sanitized.append(past_rec)
 
     # Persist the gapless sanitized history into in-memory store
-    _OPEN_SOURCE_MINUTE_HISTORY = sanitized[:120]
+    _OPEN_SOURCE_MINUTE_HISTORY = sanitized[:1440]
     return sanitized[:limit]
 
 
 @router.get("/weather/telemetry-feed")
 async def get_weather_telemetry_feed(
-    limit: int = Query(60, ge=1, le=120),
+    limit: int = Query(60, ge=1, le=1440),
     force_refresh: bool = Query(False),
     latitude: float = Query(24.8607),
     longitude: float = Query(67.0011)
@@ -513,7 +513,7 @@ async def get_weather_telemetry_feed(
 
 @router.get("/weather/telemetry-export.csv")
 async def export_weather_telemetry_csv(
-    limit: int = Query(100, ge=1, le=500),
+    limit: int = Query(1440, ge=1, le=1440),
     latitude: float = Query(24.8607),
     longitude: float = Query(67.0011)
 ):

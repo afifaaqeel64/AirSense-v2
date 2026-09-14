@@ -194,7 +194,8 @@ async def async_generate_daily_backup(
     send_email: bool = True,
     email_to: Optional[str] = None,
     attach_zip: bool = True,
-    tier: str = "all"
+    tier: str = "all",
+    tier2_resolution: str = "minute"
 ) -> Dict[str, Any]:
     """Asynchronously generates 3-tier partitioned CSV backups, cross-validation, and dispatches notification."""
     import zipfile
@@ -244,14 +245,15 @@ async def async_generate_daily_backup(
 
     # 2. Build datasets for Tier 1, Tier 2, Tier 3
     tier1_rows = build_tier1_dataset(readings, os_hourly) if total_records > 0 else []
-    tier2_rows = build_tier2_dataset(os_hourly)
+    expand_t2 = (tier2_resolution == "minute")
+    tier2_rows = build_tier2_dataset(os_hourly, expand_to_minute=expand_t2)
     tier3_rows = build_tier3_dataset(readings, os_hourly) if total_records > 0 else []
 
     # Export Tiered CSV files
     export_dataset_to_csv(tier1_rows, tier1_file)
     export_dataset_to_csv(tier2_rows, tier2_file)
     export_dataset_to_csv(tier3_rows, tier3_file)
-    logger.info(f"Tiered CSV files saved: {tier1_file.name}, {tier2_file.name}, {tier3_file.name}")
+    logger.info(f"Tiered CSV files saved: {tier1_file.name} ({len(tier1_rows)} rows), {tier2_file.name} ({len(tier2_rows)} rows), {tier3_file.name} ({len(tier3_rows)} rows)")
 
     # 3. Export Legacy CSV (maintains 100% backward compatibility for existing consumers)
     with open(csv_file, "w", newline="", encoding="utf-8") as f:
@@ -331,9 +333,9 @@ async def async_generate_daily_backup(
     caption = (
         f"AirSense Pakistan - 3-Tier Daily Snapshot\n"
         f"Date (PKT): {date_str_dash}\n"
-        f"Tier 1 (HW+Chem): {len(tier1_rows)} rows\n"
-        f"Tier 2 (OpenSource): {len(tier2_rows)} rows\n"
-        f"Tier 3 (ML Validated): {len(tier3_rows)} rows (Valid: {valid_tier3_count})\n"
+        f"Tier 1 (HW+Chem): {len(tier1_rows):,} rows\n"
+        f"Tier 2 (OpenSource): {len(tier2_rows):,} rows (24/7 Minute Stream)\n"
+        f"Tier 3 (ML Validated): {len(tier3_rows):,} rows (Valid: {valid_tier3_count:,})\n"
         f"PM2.5: Avg {avg_pm25:.1f} μg/m³ (Min: {min_pm25:.1f}, Max: {max_pm25:.1f})\n"
         f"Temperature: Avg {avg_temp:.1f}°C | Humidity: Avg {avg_hum:.0f}%\n"
         f"Primary Defining File: {tier3_file.name if total_records > 0 else csv_file.name}"
@@ -437,7 +439,8 @@ def generate_daily_backup(
     send_email: bool = True,
     email_to: Optional[str] = None,
     attach_zip: bool = True,
-    tier: str = "all"
+    tier: str = "all",
+    tier2_resolution: str = "minute"
 ) -> Dict[str, Any]:
     """Generates daily partitioned CSV backup and dispatches notification, safely handling running event loops."""
     try:
@@ -457,7 +460,8 @@ def generate_daily_backup(
                         send_email=send_email,
                         email_to=email_to,
                         attach_zip=attach_zip,
-                        tier=tier
+                        tier=tier,
+                        tier2_resolution=tier2_resolution
                     )
                 )
             )
@@ -471,7 +475,8 @@ def generate_daily_backup(
                 send_email=send_email,
                 email_to=email_to,
                 attach_zip=attach_zip,
-                tier=tier
+                tier=tier,
+                tier2_resolution=tier2_resolution
             )
         )
 
@@ -482,6 +487,7 @@ def main():
     parser.add_argument("--output-dir", type=str, default=None, help="Directory to save backup CSV")
     parser.add_argument("--db-url", type=str, default=None, help="Optional database connection URL override")
     parser.add_argument("--tier", type=str, choices=["1", "2", "3", "all"], default="all", help="Specific tier to focus on (default: all)")
+    parser.add_argument("--tier2-resolution", type=str, choices=["minute", "hourly"], default="minute", help="Tier 2 resolution: minute (1440 rows) or hourly (24 rows)")
     parser.add_argument("--no-telegram", action="store_true", help="Disable Telegram dispatch")
     parser.add_argument("--no-email", action="store_true", help="Disable Email dispatch")
     parser.add_argument("--email-to", type=str, default=None, help="Recipient email address(es) override (comma-separated)")
@@ -507,7 +513,8 @@ def main():
         send_email=not args.no_email,
         email_to=args.email_to,
         attach_zip=not args.no_attach_zip,
-        tier=args.tier
+        tier=args.tier,
+        tier2_resolution=args.tier2_resolution
     )
     logger.info(f"Backup process finished with status: {res['status']}")
 

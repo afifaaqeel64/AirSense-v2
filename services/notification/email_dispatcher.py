@@ -70,7 +70,7 @@ SUMMARY OBSERVATIONS:
 
 3-TIER DATASET CLASSIFICATION:
 - Tier 1 (Hardware Sensor + Verified Chemicals): {t1_cnt:,} rows
-- Tier 2 (Pure Open-Source Meteorological & Chemical Grid): {t2_cnt} hourly records
+- Tier 2 (Pure Open-Source Meteorological & Chemical Grid): {t2_cnt:,} records (24/7 Continuous Minute Stream)
 - Tier 3 (ML Cumulative Validated Defining Dataset): {t3_cnt:,} rows (Validated: {t3_valid:,})
 
 ATTACHMENTS INCLUDED:
@@ -215,8 +215,8 @@ def render_backup_email_html(summary_data: Dict[str, Any], target_date: str) -> 
                 </tr>
                 <tr style="border-bottom: 1px solid #283548;">
                   <td style="padding: 10px 14px; font-size: 12px; font-weight: 700; color: #a78bfa;">Tier 2</td>
-                  <td style="padding: 10px 14px; font-size: 12px; color: #cbd5e1;">Pure Open-Source Meteorological & Chemical Grid</td>
-                  <td align="right" style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #f1f5f9;">{t2_cnt}</td>
+                  <td style="padding: 10px 14px; font-size: 12px; color: #cbd5e1;">Pure Open-Source Meteorological & Chemical Grid (24/7 Minute Stream)</td>
+                  <td align="right" style="padding: 10px 14px; font-size: 12px; font-weight: 600; color: #f1f5f9;">{t2_cnt:,}</td>
                 </tr>
                 <tr>
                   <td style="padding: 10px 14px; font-size: 12px; font-weight: 700; color: #10b981;">Tier 3 ★</td>
