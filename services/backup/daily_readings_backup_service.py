@@ -25,11 +25,14 @@ BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
-# Ensure base backup directory uses D: if available, otherwise project-local ./data/backups/daily
-if os.path.exists("D:/"):
+# Ensure base backup directory uses /tmp on Vercel, D: if available, otherwise project-local ./data/backups/daily
+if os.environ.get("VERCEL"):
+    DAILY_BACKUP_BASE_DIR = "/tmp/data/backups/daily"
+elif os.path.exists("D:/"):
     DAILY_BACKUP_BASE_DIR = "D:/MUNIM - UOE @BIC/AirSense/data/backups/daily"
 else:
     DAILY_BACKUP_BASE_DIR = os.path.abspath(os.path.join(BASE_DIR, "data", "backups", "daily")).replace("\\", "/")
+
 
 # All Canonical Target Variables Required for Complete Model Training
 ALL_TARGET_VARIABLES: List[str] = [
@@ -102,7 +105,11 @@ class DailyReadingsBackupService:
     def __init__(self, base_dir: str = DAILY_BACKUP_BASE_DIR):
         self.base_dir = os.path.abspath(base_dir).replace("\\", "/")
         self._assert_d_drive(self.base_dir)
-        os.makedirs(self.base_dir, exist_ok=True)
+        try:
+            os.makedirs(self.base_dir, exist_ok=True)
+        except Exception:
+            pass
+
 
     def _assert_d_drive(self, path: str):
         norm = os.path.abspath(path).replace("\\", "/")
@@ -453,7 +460,11 @@ class DailyReadingsBackupService:
 
         partition_dir = os.path.join(self.base_dir, date_str).replace("\\", "/")
         self._assert_d_drive(partition_dir)
-        os.makedirs(partition_dir, exist_ok=True)
+        try:
+            os.makedirs(partition_dir, exist_ok=True)
+        except Exception:
+            pass
+
 
         # 1. Generate Hardware Readings
         df_hw = self.generate_daily_hardware_readings(date_str, campus_code=campus_code)
