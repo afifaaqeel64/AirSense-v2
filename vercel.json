@@ -5,6 +5,10 @@
   "trailingSlash": false,
   "rewrites": [
     {
+      "source": "/api",
+      "destination": "/api/index"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index"
     },
@@ -49,7 +53,7 @@
       "destination": "/public/index.html"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!api(?:/|$)|docs|openapi\\.json).*)",
       "destination": "/public/$1"
     }
   ]

@@ -74,7 +74,7 @@ if import_error is None:
         }
 
 
-class VercelPathNormalizer:
+class VercelPathNormalizerMiddleware:
     """ASGI middleware normalizing request path across Vercel URL rewrites and cold-start DB setup."""
 
     def __init__(self, app):
@@ -110,15 +110,17 @@ class VercelPathNormalizer:
                 # Determine original client path
                 orig_path = path
                 for candidate in (matched_path, invoke_path, raw_path):
-                    if candidate and (candidate.startswith("/api/") or candidate.startswith("/v1/") or candidate in ("/docs", "/openapi.json")):
+                    if candidate and (candidate.startswith("/api/") or candidate.startswith("/v1/") or candidate.startswith("/v2/") or candidate in ("/docs", "/openapi.json")):
                         orig_path = candidate
                         break
 
-                if orig_path.startswith("/api/index.py/"):
+                if orig_path in ("/api/index", "/api/index/"):
+                    orig_path = "/api"
+                elif orig_path.startswith("/api/index.py/"):
                     orig_path = orig_path.replace("/api/index.py/", "/api/")
                 elif orig_path.startswith("/api/index/"):
                     orig_path = orig_path.replace("/api/index/", "/api/")
-                elif orig_path.startswith("/v1/"):
+                elif orig_path.startswith("/v1/") or orig_path.startswith("/v2/"):
                     orig_path = f"/api{orig_path}"
                 elif orig_path in ("/health", "/health/liveness", "/health/readiness", "/ready"):
                     orig_path = f"/api/v1{orig_path.replace('/health', '') or '/health/liveness'}"
@@ -136,7 +138,10 @@ class VercelPathNormalizer:
             await err_resp(scope, receive, send)
 
 
-app = VercelPathNormalizer(fastapi_app)
+fastapi_app.add_middleware(VercelPathNormalizerMiddleware)
+
+app = fastapi_app
 
 __all__ = ["app"]
+
 
