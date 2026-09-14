@@ -1,0 +1,14 @@
+{
+  "_comment": "SYNTHETIC EXAMPLE DATA ONLY - FOR TEST CONTRACT VERIFICATION. DO NOT LOAD INTO PRODUCTION.",
+  "device_id": "ESP32-ISB-001",
+  "campus_code": "ISB_CAMPUS",
+  "timestamp_utc": "2026-07-27T12:00:00Z",
+  "readings": {
+    "pm25": 42.5,
+    "pm10": 78.0,
+    "temperature": 31.2,
+    "humidity": 65.0
+  },
+  "firmware_version": "1.0.0",
+  "battery_voltage": 3.95
+}

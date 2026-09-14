@@ -1,0 +1,4 @@
+reading_id,campus_id,station_id,device_id,sequence_number,observed_at_utc,observed_at_pkt,source,pm1,pm2_5,pm10,temperature_c,humidity_pct,pressure_hpa,rain_flag,aqi
+6a693ae3-3a08-4627-83fe-608400f3f4d2,5d499c39-6735-4ab8-a445-eba06f7ccf50,5d59c18d-9888-4e74-a62e-6676c1a1f8c1,,9001,2026-09-10T08:30:00,2026-09-10 13:30:00,onsite_esp32,8.5,14.2,18.6,29.4,61.0,1012.3,False,
+4d1643bb-bf22-4830-96ed-fc8ed0719613,5d499c39-6735-4ab8-a445-eba06f7ccf50,5d59c18d-9888-4e74-a62e-6676c1a1f8c1,,9001,2026-09-10T08:30:00,2026-09-10 13:30:00,onsite_esp32,8.5,14.2,18.6,29.4,61.0,1012.3,False,
+241d3d8e-659f-4949-8b23-fda17f2e48fe,5d499c39-6735-4ab8-a445-eba06f7ccf50,5d59c18d-9888-4e74-a62e-6676c1a1f8c1,,9001,2026-09-10T08:30:00,2026-09-10 13:30:00,onsite_esp32,8.5,14.2,18.6,29.4,61.0,1012.3,False,

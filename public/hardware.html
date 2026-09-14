@@ -600,6 +600,210 @@
       .explainer-body-grid { grid-template-columns: 1fr; }
       .footer-bottom-bar { flex-direction: column; align-items: flex-start; }
     }
+
+    /* ==========================================================================
+       V2 OPERATIONAL DECISION INTELLIGENCE & PHYSICS DECK STYLES
+       ========================================================================== */
+    .v2-directive-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 22px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+      overflow: hidden;
+    }
+    .v2-directive-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 5px;
+      height: 100%;
+      background: var(--v2-accent, #00E599);
+      transition: background 0.4s ease;
+    }
+    .v2-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .v2-badge-cluster {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .v2-risk-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: var(--radius-full);
+      font-size: 11px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      background: rgba(0, 229, 153, 0.12);
+      color: #059669;
+      border: 1px solid rgba(0, 229, 153, 0.4);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      box-shadow: 0 0 10px rgba(0, 229, 153, 0.15);
+    }
+    .v2-kpi-chip {
+      padding: 3px 10px;
+      border-radius: var(--radius-full);
+      font-size: 10.5px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border);
+      color: var(--text-sub);
+    }
+    .v2-kpi-chip strong {
+      color: var(--blue-700);
+    }
+    .v2-directive-text {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text-main);
+      letter-spacing: -0.3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .v2-implication-text {
+      font-size: 12px;
+      color: var(--text-sub);
+      line-height: 1.5;
+    }
+    .v2-sectors-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .v2-sector-card {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .v2-sector-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10.5px;
+      font-weight: 800;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      color: var(--blue-800);
+    }
+    .v2-sector-action {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    .v2-sector-impact {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* 52-Physics & Satellite Radar Deck */
+    .v2-physics-radar-grid {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 14px;
+      margin-top: 4px;
+    }
+    @media (max-width: 1080px) {
+      .v2-physics-radar-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .v2-physics-card, .v2-satellite-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .v2-deck-title {
+      font-size: 12px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .v2-physics-subgrid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    @media (max-width: 768px) {
+      .v2-physics-subgrid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    .v2-phys-item {
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .v2-phys-lbl {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }
+    .v2-phys-val {
+      font-size: 18px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--text-main);
+    }
+    .v2-phys-desc {
+      font-size: 9.5px;
+      color: var(--text-sub);
+    }
+
+    .v2-radar-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--bg-card-subtle);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
+    }
+    .v2-radar-val {
+      font-size: 16px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      color: var(--blue-700);
+    }
+
   </style>
 </head>
 <body>
@@ -683,6 +887,75 @@
       </div>
     </section>
 
+    <!-- V2 OPERATIONAL DECISION INTELLIGENCE DIRECTIVE BANNER -->
+    <section class="v2-directive-card" id="v2DecisionCard">
+      <div class="v2-header-row">
+        <div class="v2-badge-cluster">
+          <span class="v2-risk-badge" id="v2RiskBadge">
+            <span class="pulse-dot" style="background:#00E599; width:8px; height:8px;"></span>
+            <span id="v2RiskTierText">OPTIMAL NORMAL</span>
+          </span>
+          <span class="v2-kpi-chip">Health Score: <strong id="v2HealthScore">98/100</strong></span>
+          <span class="v2-kpi-chip">Readiness: <strong id="v2ReadinessScore">98.1%</strong></span>
+          <span class="v2-kpi-chip">Dispersion: <strong id="v2DispersionClass">MODERATE</strong></span>
+          <span class="v2-kpi-chip">Engine: <strong id="v2EngineVersion">v2.1 LIVE-FUSION</strong></span>
+        </div>
+        <div>
+          <a href="/command" class="action-btn" style="background:var(--blue-600); color:#FFF; border:none; font-size:11px;">
+            OPEN V2 COMMAND CENTER ➔
+          </a>
+        </div>
+      </div>
+
+      <div>
+        <div class="v2-directive-text" id="v2PrimaryDirective">
+          NORMAL OPERATIONS: Air Quality Within Safe Baselines
+        </div>
+        <p class="v2-implication-text" id="v2HealthImplication">
+          Clean ambient air. Full outdoor activities, athletic training, and natural campus ventilation permitted.
+        </p>
+      </div>
+
+      <!-- Multi-Sector Action Hub -->
+      <div class="v2-sectors-grid">
+        <div class="v2-sector-card">
+          <div class="v2-sector-header">
+            <span>🏢 HVAC & Facilities</span>
+            <span id="v2HvacUrgency" style="color:#059669;">ROUTINE</span>
+          </div>
+          <div class="v2-sector-action" id="v2HvacAction">Maintain 40% Fresh Air Economy Mode</div>
+          <div class="v2-sector-impact" id="v2HvacImpact">+18% energy efficiency</div>
+        </div>
+
+        <div class="v2-sector-card">
+          <div class="v2-sector-header">
+            <span>🎓 Campus & Education</span>
+            <span id="v2EduUrgency" style="color:#059669;">APPROVED</span>
+          </div>
+          <div class="v2-sector-action" id="v2EduAction">Outdoor Activities Cleared</div>
+          <div class="v2-sector-impact" id="v2EduImpact">Standard sports schedule</div>
+        </div>
+
+        <div class="v2-sector-card">
+          <div class="v2-sector-header">
+            <span>🏥 Clinical Advisory</span>
+            <span id="v2HealthUrgency" style="color:#059669;">LOW RISK</span>
+          </div>
+          <div class="v2-sector-action" id="v2HealthAction">Nominal Respiratory Surge</div>
+          <div class="v2-sector-impact" id="v2HealthImpact">Triage baseline clear</div>
+        </div>
+
+        <div class="v2-sector-card">
+          <div class="v2-sector-header">
+            <span>🚦 Municipal / Traffic</span>
+            <span id="v2MuniUrgency" style="color:#059669;">CLEAR</span>
+          </div>
+          <div class="v2-sector-action" id="v2MuniAction">Normal Traffic Inflow</div>
+          <div class="v2-sector-impact" id="v2MuniImpact">No bypass restriction</div>
+        </div>
+      </div>
+    </section>
+
     <!-- LIVE HARDWARE SENSOR CARDS -->
     <section class="grid-4">
       <!-- PMS7003 -->
@@ -738,6 +1011,76 @@
         <div style="font-size:11px; color:var(--text-sub);">Pins: <code>GPIO 5 (CS) / 18 / 19 / 23</code></div>
         <div id="sdDiag" style="font-size:10.5px; color:var(--status-disconnected);">
           Awaiting VSPI activity.
+        </div>
+      </div>
+    </section>
+
+    <!-- 52-PHYSICS INVERSION DYNAMICS & NASA SATELLITE RADAR DECK -->
+    <section class="v2-physics-radar-grid">
+      <!-- 52-Physics Atmospheric & Inversion Dynamics -->
+      <div class="v2-physics-card">
+        <div class="v2-deck-title">
+          <span>🌌 52-Physics Atmospheric & Inversion Dynamics</span>
+          <span style="font-size:10px; color:var(--blue-600); font-family:var(--font-mono);">DECADA-V1 CONTRACT</span>
+        </div>
+
+        <div class="v2-physics-subgrid">
+          <div class="v2-phys-item">
+            <span class="v2-phys-lbl">Mixing Layer (BLH)</span>
+            <span class="v2-phys-val num-tabular" id="v2PhysBlh">480 m</span>
+            <span class="v2-phys-desc">Planetary boundary layer</span>
+          </div>
+
+          <div class="v2-phys-item">
+            <span class="v2-phys-lbl">Thermal Inversion</span>
+            <span class="v2-phys-val" id="v2PhysTi" style="font-size:14px; color:#059669;">LOW RISK</span>
+            <span class="v2-phys-desc">No capping layer</span>
+          </div>
+
+          <div class="v2-phys-item">
+            <span class="v2-phys-lbl">Ventilation (VC)</span>
+            <span class="v2-phys-val num-tabular" id="v2PhysVc">1,536</span>
+            <span class="v2-phys-desc">m²/s advection speed</span>
+          </div>
+
+          <div class="v2-phys-item">
+            <span class="v2-phys-lbl">Stagnation (BSI)</span>
+            <span class="v2-phys-val num-tabular" id="v2PhysBsi">56.8</span>
+            <span class="v2-phys-desc">Index out of 100</span>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-sub); border-top:1px solid var(--border); padding-top:8px;">
+          <span>Hygroscopic Growth Ratio: <strong id="v2PhysHg" class="num-tabular" style="color:var(--blue-700);">1.00</strong> (Dry)</span>
+          <span>Wind Vector: <strong id="v2PhysWind" class="num-tabular" style="color:var(--blue-700);">3.2 m/s @ 240° (WSW)</strong></span>
+        </div>
+      </div>
+
+      <!-- NASA Satellite Biomass & Transboundary Smoke Radar -->
+      <div class="v2-satellite-card">
+        <div class="v2-deck-title">
+          <span>🛰️ NASA Satellite Biomass Radar</span>
+          <span class="v2-risk-badge" id="v2RadarBadge" style="font-size:9.5px; padding:2px 8px;">MODIS / VIIRS</span>
+        </div>
+
+        <div class="v2-radar-row">
+          <div>
+            <div style="font-size:10px; font-weight:700; color:var(--text-muted); font-family:var(--font-mono); text-transform:uppercase;">Active Hotspots</div>
+            <div class="v2-radar-val num-tabular" id="v2RadarHotspots">86 Clusters</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:10px; font-weight:700; color:var(--text-muted); font-family:var(--font-mono); text-transform:uppercase;">Plume Transit Time</div>
+            <div class="v2-radar-val num-tabular" id="v2RadarTransit">~14.5 h</div>
+          </div>
+        </div>
+
+        <div style="font-size:11.5px; color:var(--text-sub); line-height:1.45;">
+          <strong>Smog Early Warning:</strong> Tracks agricultural stubble burning and transboundary smoke vectors with a <strong>12–36h advance lead time</strong> before ground sensors record particulate spikes.
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:auto;">
+          <span>Inflow Risk: <strong id="v2RadarRiskLevel" style="color:#059669;">MODERATE</strong></span>
+          <a href="/command" style="font-size:11px; color:var(--blue-600); font-weight:700; text-decoration:none; font-family:var(--font-mono);">View Plume Vectors ➔</a>
         </div>
       </div>
     </section>
@@ -1052,15 +1395,25 @@
     let savedTelemetryRecords = [];
     try {
       savedTelemetryRecords = JSON.parse(localStorage.getItem('airsense_recorded_telemetry') || '[]');
+      if (Array.isArray(savedTelemetryRecords)) {
+        savedTelemetryRecords = savedTelemetryRecords.map(r => {
+          if (!r.source || r.source === 'ESP32 ON-SITE' || r.source === 'ESP32 ON SITE' || r.source === 'onsite_esp32') {
+            r.source = 'BIC-KHI-ROOF-01';
+          }
+          return r;
+        });
+      } else {
+        savedTelemetryRecords = [];
+      }
     } catch(e) { savedTelemetryRecords = []; }
 
     if (!savedTelemetryRecords || savedTelemetryRecords.length === 0) {
       const nowMs = Date.now();
       savedTelemetryRecords = [
-        { timeMs: nowMs - 15000, time: new Date(nowMs - 15000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.5', pm25: '17.8', pm10: '21.0', temp: '28.5', hum: '63.0', press: '1012.2', rain: false, qc: 'VERIFIED RAW' },
-        { timeMs: nowMs - 30000, time: new Date(nowMs - 30000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.8', pm25: '18.1', pm10: '21.5', temp: '28.6', hum: '63.2', press: '1012.1', rain: false, qc: 'VERIFIED RAW' },
-        { timeMs: nowMs - 45000, time: new Date(nowMs - 45000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.0', pm25: '18.4', pm10: '22.0', temp: '28.7', hum: '63.5', press: '1012.0', rain: false, qc: 'VERIFIED RAW' },
-        { timeMs: nowMs - 60000, time: new Date(nowMs - 60000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.2', pm25: '18.7', pm10: '22.5', temp: '28.9', hum: '63.8', press: '1011.9', rain: false, qc: 'VERIFIED RAW' }
+        { timeMs: nowMs - 15000, time: new Date(nowMs - 15000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '11.5', pm25: '17.8', pm10: '21.0', temp: '28.5', hum: '63.0', press: '1012.2', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 30000, time: new Date(nowMs - 30000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '11.8', pm25: '18.1', pm10: '21.5', temp: '28.6', hum: '63.2', press: '1012.1', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 45000, time: new Date(nowMs - 45000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '12.0', pm25: '18.4', pm10: '22.0', temp: '28.7', hum: '63.5', press: '1012.0', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 60000, time: new Date(nowMs - 60000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '12.2', pm25: '18.7', pm10: '22.5', temp: '28.9', hum: '63.8', press: '1011.9', rain: false, qc: 'VERIFIED RAW' }
       ];
       try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
     }
@@ -1107,15 +1460,40 @@
       const pressVal = (p.pressure !== undefined && p.pressure !== null) ? Number(p.pressure).toFixed(1) : (p.pressure_hpa !== undefined && p.pressure_hpa !== null ? Number(p.pressure_hpa).toFixed(1) : '--');
       const rainFlag = Boolean(p.rain_flag);
 
-      const timeMs = (p.timestamp_epoch && Number(p.timestamp_epoch) > 1700000000)
-        ? Number(p.timestamp_epoch) * 1000
-        : Date.now();
+      // Maintain node name strictly as BIC-KHI-ROOF-01
+      let stationName = p.station || p.station_code || 'BIC-KHI-ROOF-01';
+      if (stationName === 'ESP32 ON-SITE' || stationName === 'ESP32 ON SITE' || stationName === 'onsite_esp32') {
+        stationName = 'BIC-KHI-ROOF-01';
+      }
+
+      let timeMs;
+      if (p.timestamp_epoch && Number(p.timestamp_epoch) > 1700000000) {
+        timeMs = Number(p.timestamp_epoch) * 1000;
+      } else if (p.timestamp_utc) {
+        timeMs = new Date(p.timestamp_utc).getTime();
+      } else if (p.timeMs) {
+        timeMs = Number(p.timeMs);
+      } else {
+        timeMs = Date.now();
+      }
       const timeStr = new Date(timeMs).toLocaleTimeString();
+
+      // Deduplication: prevent dual/repeated records for same timestamp (<8s) or identical reading within 25s
+      const isDuplicate = savedTelemetryRecords.some(r => {
+        const timeDiff = Math.abs((r.timeMs || 0) - timeMs);
+        if (timeDiff < 8000) return true;
+        if (timeDiff < 25000 && r.pm25 === pm25Val && r.temp === tempVal && r.hum === humVal && r.press === pressVal) {
+          return true;
+        }
+        return false;
+      });
+      if (isDuplicate) return;
 
       const newRec = {
         timeMs: timeMs,
         time: timeStr,
-        source: 'ESP32 ON-SITE',
+        timestamp_utc: p.timestamp_utc || new Date(timeMs).toISOString(),
+        source: stationName,
         pm1: pm1Val,
         pm25: pm25Val,
         pm10: pm10Val,
@@ -1126,12 +1504,137 @@
         qc: 'VERIFIED RAW'
       };
       
-      if (!savedTelemetryRecords.some(r => Math.abs((r.timeMs || 0) - timeMs) < 5000)) {
-        savedTelemetryRecords.unshift(newRec);
-        if (savedTelemetryRecords.length > 120) savedTelemetryRecords.length = 120;
-        try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
-        renderTelemetryTable();
+      savedTelemetryRecords.unshift(newRec);
+      while (savedTelemetryRecords.length > 120) savedTelemetryRecords.pop();
+      try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
+  
+    // =========================================================================
+    // V2 OPERATIONAL DECISION & SATELLITE RADAR HYDRATION
+    // =========================================================================
+    async function fetchV2OperationalIntelligence() {
+      try {
+        const res = await fetch(`/api/v2/decisions/live?campus_code=KARACHI&_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // Update Risk Tier & Directive
+        const card = document.getElementById('v2DecisionCard');
+        if (card && data.risk_color) {
+          card.style.setProperty('--v2-accent', data.risk_color);
+        }
+        const badge = document.getElementById('v2RiskBadge');
+        const badgeText = document.getElementById('v2RiskTierText');
+        if (badgeText && data.risk_tier) {
+          badgeText.textContent = data.risk_tier.replace(/_/g, ' ');
+          if (badge) {
+            badge.style.color = data.risk_color || '#059669';
+            badge.style.borderColor = data.risk_color || 'rgba(0,229,153,0.4)';
+          }
+        }
+        const directiveEl = document.getElementById('v2PrimaryDirective');
+        if (directiveEl && data.primary_directive) {
+          directiveEl.textContent = data.primary_directive;
+        }
+        const impEl = document.getElementById('v2HealthImplication');
+        if (impEl && data.health_implication) {
+          impEl.textContent = data.health_implication;
+        }
+        const healthEl = document.getElementById('v2HealthScore');
+        if (healthEl && data.health_rating_score !== undefined) {
+          healthEl.textContent = `${data.health_rating_score}/100`;
+        }
+        const readEl = document.getElementById('v2ReadinessScore');
+        if (readEl && data.operational_readiness_pct !== undefined) {
+          readEl.textContent = `${data.operational_readiness_pct}%`;
+        }
+        const dispEl = document.getElementById('v2DispersionClass');
+        if (dispEl && data.dispersion_class) {
+          dispEl.textContent = data.dispersion_class.replace(/_/g, ' ');
+        }
+
+        // Active triggers
+        if (data.active_triggers && Array.isArray(data.active_triggers)) {
+          data.active_triggers.forEach(trig => {
+            const sec = (trig.sector || '').toLowerCase();
+            if (sec.includes('hvac')) {
+              const el = document.getElementById('v2HvacAction');
+              const imp = document.getElementById('v2HvacImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('campus') || sec.includes('safety') || sec.includes('education')) {
+              const el = document.getElementById('v2EduAction');
+              const imp = document.getElementById('v2EduImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('health') || sec.includes('clinic')) {
+              const el = document.getElementById('v2HealthAction');
+              const imp = document.getElementById('v2HealthImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('muni') || sec.includes('traffic')) {
+              const el = document.getElementById('v2MuniAction');
+              const imp = document.getElementById('v2MuniImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            }
+          });
+        }
+
+        // Atmospheric Physics telemetry summary
+        if (data.telemetry_summary) {
+          const ts = data.telemetry_summary;
+          const vc = Math.round(480 * (ts.wind_speed_m_s || 3.2));
+          const vcEl = document.getElementById('v2PhysVc');
+          if (vcEl) vcEl.textContent = vc.toLocaleString();
+          const bsiEl = document.getElementById('v2PhysBsi');
+          if (bsiEl && data.stagnation_index !== undefined) {
+            bsiEl.textContent = data.stagnation_index;
+          }
+          const hgEl = document.getElementById('v2PhysHg');
+          if (hgEl && ts.hygroscopic_factor !== undefined) {
+            hgEl.textContent = Number(ts.hygroscopic_factor).toFixed(2);
+          }
+          const windEl = document.getElementById('v2PhysWind');
+          if (windEl && ts.wind_speed_m_s !== undefined) {
+            windEl.textContent = `${ts.wind_speed_m_s} m/s @ ${ts.wind_direction_deg || 240}° (WSW)`;
+          }
+        }
+      } catch (e) {
+        console.warn('[V2] Live decision fetch fallback active:', e);
       }
+    }
+
+    async function fetchV2BiomassRadar() {
+      try {
+        const res = await fetch(`/api/v2/decisions/radar/biomass-hotspots?_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.total_hotspots !== undefined) {
+          const el = document.getElementById('v2RadarHotspots');
+          if (el) el.textContent = `${data.total_hotspots} Clusters`;
+        }
+        if (data.plume_trajectories && data.plume_trajectories.Lahore) {
+          const lhr = data.plume_trajectories.Lahore;
+          const trEl = document.getElementById('v2RadarTransit');
+          if (trEl) trEl.textContent = `~${lhr.estimated_transit_hours} h`;
+          const rkEl = document.getElementById('v2RadarRiskLevel');
+          if (rkEl) {
+            rkEl.textContent = lhr.inflow_risk_level || 'MODERATE';
+            rkEl.style.color = lhr.inflow_risk_level === 'CRITICAL' ? '#DC2626' : (lhr.inflow_risk_level === 'ELEVATED' ? '#D97706' : '#059669');
+          }
+        }
+      } catch (e) {
+        console.warn('[V2] Biomass radar fetch fallback active:', e);
+      }
+    }
+
+    // V2 Intelligence Periodic Invocations
+    fetchV2OperationalIntelligence();
+    fetchV2BiomassRadar();
+    setInterval(fetchV2OperationalIntelligence, 15000);
+    setInterval(fetchV2BiomassRadar, 30000);
+
+    renderTelemetryTable();
     }
 
     let hasHydratedTelemetry = false;
@@ -1150,7 +1653,7 @@
               timeMs: timeMs,
               time: timeStr,
               timestamp_utc: r.timestamp_utc || null,
-              source: r.station || 'ESP32 ON-SITE',
+              source: (r.station && r.station !== 'ESP32 ON-SITE' && r.station !== 'ESP32 ON SITE' && r.station !== 'onsite_esp32') ? r.station : 'BIC-KHI-ROOF-01',
               pm1: (r.pm1 !== undefined && r.pm1 !== null) ? Number(r.pm1).toFixed(1) : '--',
               pm25: (r.pm2_5 !== undefined && r.pm2_5 !== null) ? Number(r.pm2_5).toFixed(1) : (r.pm25 !== undefined && r.pm25 !== null ? Number(r.pm25).toFixed(1) : '--'),
               pm10: (r.pm10 !== undefined && r.pm10 !== null) ? Number(r.pm10).toFixed(1) : '--',
@@ -1177,7 +1680,134 @@
           
           savedTelemetryRecords = merged.slice(0, 120);
           try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
-          renderTelemetryTable();
+      
+    // =========================================================================
+    // V2 OPERATIONAL DECISION & SATELLITE RADAR HYDRATION
+    // =========================================================================
+    async function fetchV2OperationalIntelligence() {
+      try {
+        const res = await fetch(`/api/v2/decisions/live?campus_code=KARACHI&_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // Update Risk Tier & Directive
+        const card = document.getElementById('v2DecisionCard');
+        if (card && data.risk_color) {
+          card.style.setProperty('--v2-accent', data.risk_color);
+        }
+        const badge = document.getElementById('v2RiskBadge');
+        const badgeText = document.getElementById('v2RiskTierText');
+        if (badgeText && data.risk_tier) {
+          badgeText.textContent = data.risk_tier.replace(/_/g, ' ');
+          if (badge) {
+            badge.style.color = data.risk_color || '#059669';
+            badge.style.borderColor = data.risk_color || 'rgba(0,229,153,0.4)';
+          }
+        }
+        const directiveEl = document.getElementById('v2PrimaryDirective');
+        if (directiveEl && data.primary_directive) {
+          directiveEl.textContent = data.primary_directive;
+        }
+        const impEl = document.getElementById('v2HealthImplication');
+        if (impEl && data.health_implication) {
+          impEl.textContent = data.health_implication;
+        }
+        const healthEl = document.getElementById('v2HealthScore');
+        if (healthEl && data.health_rating_score !== undefined) {
+          healthEl.textContent = `${data.health_rating_score}/100`;
+        }
+        const readEl = document.getElementById('v2ReadinessScore');
+        if (readEl && data.operational_readiness_pct !== undefined) {
+          readEl.textContent = `${data.operational_readiness_pct}%`;
+        }
+        const dispEl = document.getElementById('v2DispersionClass');
+        if (dispEl && data.dispersion_class) {
+          dispEl.textContent = data.dispersion_class.replace(/_/g, ' ');
+        }
+
+        // Active triggers
+        if (data.active_triggers && Array.isArray(data.active_triggers)) {
+          data.active_triggers.forEach(trig => {
+            const sec = (trig.sector || '').toLowerCase();
+            if (sec.includes('hvac')) {
+              const el = document.getElementById('v2HvacAction');
+              const imp = document.getElementById('v2HvacImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('campus') || sec.includes('safety') || sec.includes('education')) {
+              const el = document.getElementById('v2EduAction');
+              const imp = document.getElementById('v2EduImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('health') || sec.includes('clinic')) {
+              const el = document.getElementById('v2HealthAction');
+              const imp = document.getElementById('v2HealthImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('muni') || sec.includes('traffic')) {
+              const el = document.getElementById('v2MuniAction');
+              const imp = document.getElementById('v2MuniImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            }
+          });
+        }
+
+        // Atmospheric Physics telemetry summary
+        if (data.telemetry_summary) {
+          const ts = data.telemetry_summary;
+          const vc = Math.round(480 * (ts.wind_speed_m_s || 3.2));
+          const vcEl = document.getElementById('v2PhysVc');
+          if (vcEl) vcEl.textContent = vc.toLocaleString();
+          const bsiEl = document.getElementById('v2PhysBsi');
+          if (bsiEl && data.stagnation_index !== undefined) {
+            bsiEl.textContent = data.stagnation_index;
+          }
+          const hgEl = document.getElementById('v2PhysHg');
+          if (hgEl && ts.hygroscopic_factor !== undefined) {
+            hgEl.textContent = Number(ts.hygroscopic_factor).toFixed(2);
+          }
+          const windEl = document.getElementById('v2PhysWind');
+          if (windEl && ts.wind_speed_m_s !== undefined) {
+            windEl.textContent = `${ts.wind_speed_m_s} m/s @ ${ts.wind_direction_deg || 240}° (WSW)`;
+          }
+        }
+      } catch (e) {
+        console.warn('[V2] Live decision fetch fallback active:', e);
+      }
+    }
+
+    async function fetchV2BiomassRadar() {
+      try {
+        const res = await fetch(`/api/v2/decisions/radar/biomass-hotspots?_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.total_hotspots !== undefined) {
+          const el = document.getElementById('v2RadarHotspots');
+          if (el) el.textContent = `${data.total_hotspots} Clusters`;
+        }
+        if (data.plume_trajectories && data.plume_trajectories.Lahore) {
+          const lhr = data.plume_trajectories.Lahore;
+          const trEl = document.getElementById('v2RadarTransit');
+          if (trEl) trEl.textContent = `~${lhr.estimated_transit_hours} h`;
+          const rkEl = document.getElementById('v2RadarRiskLevel');
+          if (rkEl) {
+            rkEl.textContent = lhr.inflow_risk_level || 'MODERATE';
+            rkEl.style.color = lhr.inflow_risk_level === 'CRITICAL' ? '#DC2626' : (lhr.inflow_risk_level === 'ELEVATED' ? '#D97706' : '#059669');
+          }
+        }
+      } catch (e) {
+        console.warn('[V2] Biomass radar fetch fallback active:', e);
+      }
+    }
+
+    // V2 Intelligence Periodic Invocations
+    fetchV2OperationalIntelligence();
+    fetchV2BiomassRadar();
+    setInterval(fetchV2OperationalIntelligence, 15000);
+    setInterval(fetchV2BiomassRadar, 30000);
+
+    renderTelemetryTable();
           hasHydratedTelemetry = true;
 
           // Update primary cards immediately from latest record if currently empty
@@ -1322,9 +1952,20 @@
           setTimeout(initCloudMQTT, 3000);
         };
 
+        let lastMqttPayloadStr = null;
+        let lastMqttPayloadTime = 0;
         client.onMessageArrived = function (message) {
           try {
-            const payload = JSON.parse(message.payloadString);
+            const payloadStr = message.payloadString;
+            const now = Date.now();
+            // Drop duplicate payload strings delivered twice within 4 seconds
+            if (payloadStr === lastMqttPayloadStr && (now - lastMqttPayloadTime) < 4000) {
+              return;
+            }
+            lastMqttPayloadStr = payloadStr;
+            lastMqttPayloadTime = now;
+
+            const payload = JSON.parse(payloadStr);
             applyLiveTelemetryPacket(payload);
           } catch (e) {
             console.error("[MQTT] Error parsing packet payload:", e);
@@ -1339,7 +1980,7 @@
           onSuccess: function () {
             isMqttConnecting = false;
             console.log("[MQTT] Connected to Global Cloud Broker via WebSocket (" + mqttHost + ":" + mqttPort + ")!");
-            client.subscribe("airsense/#");
+            // Authoritative single subscription to avoid dual response (supported pattern: airsense/#)
             client.subscribe("airsense/karachi/bic_roof/telemetry");
           },
           onFailure: function (e) {
@@ -1371,6 +2012,7 @@
       }
     }
 
+    let lastDiagPacketIso = null;
     async function fetchHardwareDiagnostics() {
       try {
         const res = await fetch(`/api/v1/ingest/sensors/diagnostic?_t=${Date.now()}`);
@@ -1381,20 +2023,30 @@
           lastMqttPacketTime = Math.max(lastMqttPacketTime, Date.now() - lagMs);
           renderConnectedUI(data);
 
-          const pms = data.sensors?.pms7003?.last_valid_value;
-          const bme = data.sensors?.bme280?.last_valid_value;
-          const rain = data.sensors?.rain_sensor?.last_valid_value;
-          const hasValidTelemetry = (pms && pms.pm2_5 !== undefined && pms.pm2_5 !== null) || (bme && bme.temperature_c !== undefined && bme.temperature_c !== null);
-          if (hasValidTelemetry) {
-            addTelemetryRecord({
-              pm1: pms?.pm1 ?? null,
-              pm2_5: pms?.pm2_5 ?? null,
-              pm10: pms?.pm10 ?? null,
-              temperature: bme ? bme.temperature_c : null,
-              humidity: bme ? bme.humidity_pct : null,
-              pressure: bme ? bme.pressure_hpa : null,
-              rain_flag: rain ? rain.rain_flag : false
-            });
+          // Only inject diagnostic reading into telemetry table if MQTT is inactive (>25s) AND this packet is genuinely new
+          const isMqttLive = (Date.now() - lastMqttPacketTime) < 25000;
+          const packetIso = data.last_packet_received_at;
+          const isNewPacket = packetIso && packetIso !== lastDiagPacketIso;
+
+          if (!isMqttLive && isNewPacket) {
+            lastDiagPacketIso = packetIso;
+            const pms = data.sensors?.pms7003?.last_valid_value;
+            const bme = data.sensors?.bme280?.last_valid_value;
+            const rain = data.sensors?.rain_sensor?.last_valid_value;
+            const hasValidTelemetry = (pms && pms.pm2_5 !== undefined && pms.pm2_5 !== null) || (bme && bme.temperature_c !== undefined && bme.temperature_c !== null);
+            if (hasValidTelemetry) {
+              addTelemetryRecord({
+                timestamp_utc: packetIso,
+                station: data.station_code || 'BIC-KHI-ROOF-01',
+                pm1: pms?.pm1 ?? null,
+                pm2_5: pms?.pm2_5 ?? null,
+                pm10: pms?.pm10 ?? null,
+                temperature: bme ? bme.temperature_c : null,
+                humidity: bme ? bme.humidity_pct : null,
+                pressure: bme ? bme.pressure_hpa : null,
+                rain_flag: rain ? rain.rain_flag : false
+              });
+            }
           }
         } else {
           // Instantly mark disconnected if packet age exceeds 35s
@@ -1433,6 +2085,133 @@
     window.addEventListener('focus', handleTabResume);
 
     // Initialize Telemetry Table, Historical Hydration, Cloud MQTT, and Watchdog (1-minute cadence)
+
+    // =========================================================================
+    // V2 OPERATIONAL DECISION & SATELLITE RADAR HYDRATION
+    // =========================================================================
+    async function fetchV2OperationalIntelligence() {
+      try {
+        const res = await fetch(`/api/v2/decisions/live?campus_code=KARACHI&_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // Update Risk Tier & Directive
+        const card = document.getElementById('v2DecisionCard');
+        if (card && data.risk_color) {
+          card.style.setProperty('--v2-accent', data.risk_color);
+        }
+        const badge = document.getElementById('v2RiskBadge');
+        const badgeText = document.getElementById('v2RiskTierText');
+        if (badgeText && data.risk_tier) {
+          badgeText.textContent = data.risk_tier.replace(/_/g, ' ');
+          if (badge) {
+            badge.style.color = data.risk_color || '#059669';
+            badge.style.borderColor = data.risk_color || 'rgba(0,229,153,0.4)';
+          }
+        }
+        const directiveEl = document.getElementById('v2PrimaryDirective');
+        if (directiveEl && data.primary_directive) {
+          directiveEl.textContent = data.primary_directive;
+        }
+        const impEl = document.getElementById('v2HealthImplication');
+        if (impEl && data.health_implication) {
+          impEl.textContent = data.health_implication;
+        }
+        const healthEl = document.getElementById('v2HealthScore');
+        if (healthEl && data.health_rating_score !== undefined) {
+          healthEl.textContent = `${data.health_rating_score}/100`;
+        }
+        const readEl = document.getElementById('v2ReadinessScore');
+        if (readEl && data.operational_readiness_pct !== undefined) {
+          readEl.textContent = `${data.operational_readiness_pct}%`;
+        }
+        const dispEl = document.getElementById('v2DispersionClass');
+        if (dispEl && data.dispersion_class) {
+          dispEl.textContent = data.dispersion_class.replace(/_/g, ' ');
+        }
+
+        // Active triggers
+        if (data.active_triggers && Array.isArray(data.active_triggers)) {
+          data.active_triggers.forEach(trig => {
+            const sec = (trig.sector || '').toLowerCase();
+            if (sec.includes('hvac')) {
+              const el = document.getElementById('v2HvacAction');
+              const imp = document.getElementById('v2HvacImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('campus') || sec.includes('safety') || sec.includes('education')) {
+              const el = document.getElementById('v2EduAction');
+              const imp = document.getElementById('v2EduImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('health') || sec.includes('clinic')) {
+              const el = document.getElementById('v2HealthAction');
+              const imp = document.getElementById('v2HealthImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            } else if (sec.includes('muni') || sec.includes('traffic')) {
+              const el = document.getElementById('v2MuniAction');
+              const imp = document.getElementById('v2MuniImpact');
+              if (el) el.textContent = trig.action;
+              if (imp && trig.impact_metric) imp.textContent = trig.impact_metric;
+            }
+          });
+        }
+
+        // Atmospheric Physics telemetry summary
+        if (data.telemetry_summary) {
+          const ts = data.telemetry_summary;
+          const vc = Math.round(480 * (ts.wind_speed_m_s || 3.2));
+          const vcEl = document.getElementById('v2PhysVc');
+          if (vcEl) vcEl.textContent = vc.toLocaleString();
+          const bsiEl = document.getElementById('v2PhysBsi');
+          if (bsiEl && data.stagnation_index !== undefined) {
+            bsiEl.textContent = data.stagnation_index;
+          }
+          const hgEl = document.getElementById('v2PhysHg');
+          if (hgEl && ts.hygroscopic_factor !== undefined) {
+            hgEl.textContent = Number(ts.hygroscopic_factor).toFixed(2);
+          }
+          const windEl = document.getElementById('v2PhysWind');
+          if (windEl && ts.wind_speed_m_s !== undefined) {
+            windEl.textContent = `${ts.wind_speed_m_s} m/s @ ${ts.wind_direction_deg || 240}° (WSW)`;
+          }
+        }
+      } catch (e) {
+        console.warn('[V2] Live decision fetch fallback active:', e);
+      }
+    }
+
+    async function fetchV2BiomassRadar() {
+      try {
+        const res = await fetch(`/api/v2/decisions/radar/biomass-hotspots?_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.total_hotspots !== undefined) {
+          const el = document.getElementById('v2RadarHotspots');
+          if (el) el.textContent = `${data.total_hotspots} Clusters`;
+        }
+        if (data.plume_trajectories && data.plume_trajectories.Lahore) {
+          const lhr = data.plume_trajectories.Lahore;
+          const trEl = document.getElementById('v2RadarTransit');
+          if (trEl) trEl.textContent = `~${lhr.estimated_transit_hours} h`;
+          const rkEl = document.getElementById('v2RadarRiskLevel');
+          if (rkEl) {
+            rkEl.textContent = lhr.inflow_risk_level || 'MODERATE';
+            rkEl.style.color = lhr.inflow_risk_level === 'CRITICAL' ? '#DC2626' : (lhr.inflow_risk_level === 'ELEVATED' ? '#D97706' : '#059669');
+          }
+        }
+      } catch (e) {
+        console.warn('[V2] Biomass radar fetch fallback active:', e);
+      }
+    }
+
+    // V2 Intelligence Periodic Invocations
+    fetchV2OperationalIntelligence();
+    fetchV2BiomassRadar();
+    setInterval(fetchV2OperationalIntelligence, 15000);
+    setInterval(fetchV2BiomassRadar, 30000);
+
     renderTelemetryTable();
     hydrateHistoricalTelemetry();
     initCloudMQTT();

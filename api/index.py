@@ -48,7 +48,11 @@ async def api_root_index():
             "telemetry_feed": "/api/v1/providers/weather/telemetry-feed",
             "ingest_reading": "/api/v1/ingest/reading",
             "sensor_diagnostics": "/api/v1/ingest/sensors/diagnostic",
-            "latest_readings": "/api/v1/ingest/latest"
+            "latest_readings": "/api/v1/ingest/latest",
+            "v2_live_decisions": "/api/v2/decisions/live",
+            "v2_sectors": "/api/v2/sectors",
+            "v2_biomass_radar": "/api/v2/decisions/radar/biomass-hotspots",
+            "v2_10day_horizon": "/api/v2/decisions/10-day-horizon"
         }
     }
 

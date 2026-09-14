@@ -71,8 +71,9 @@ class BackgroundScheduler:
         self._tasks["hardware_watchdog"] = asyncio.create_task(self._hardware_watchdog_worker())
         self._tasks["hourly_qc_rollup"] = asyncio.create_task(self._hourly_qc_worker())
         self._tasks["daily_backup"] = asyncio.create_task(self._daily_backup_worker())
+        self._tasks["ops_pipelines_engine"] = asyncio.create_task(self._ops_pipelines_worker())
 
-        logger.info("[SUCCESS] 4 autonomous background workers running.")
+        logger.info("[SUCCESS] 5 autonomous background workers running.")
 
     async def stop(self):
         """Gracefully terminates all background worker tasks."""
@@ -208,6 +209,48 @@ class BackgroundScheduler:
             # Sleep 24 hours (86,400 seconds)
             try:
                 await asyncio.sleep(86400)
+            except asyncio.CancelledError:
+                break
+
+    async def _ops_pipelines_worker(self):
+        """Runs operational intelligence and scraping pipelines autonomously with safe boundaries."""
+        await asyncio.sleep(20) # Staggered start
+        while self._running:
+            try:
+                logger.info("[OPS PIPELINES] Executing autonomous ops pipelines (Weather, Policy, Impact)...")
+                
+                # Import safely within the worker
+                from pipelines.ops_weather_pipeline import OpsWeatherPipeline
+                from pipelines.ops_policy_pipeline import OpsPolicyPipeline
+                from pipelines.ops_impact_pipeline import OpsImpactPipeline
+
+                try:
+                    weather = OpsWeatherPipeline()
+                    await asyncio.to_thread(weather.run_pipeline)
+                except Exception as e:
+                    logger.error(f"Weather pipeline isolated error: {e}")
+
+                try:
+                    policy = OpsPolicyPipeline()
+                    await asyncio.to_thread(policy.run_pipeline)
+                except Exception as e:
+                    logger.error(f"Policy pipeline isolated error: {e}")
+                    
+                try:
+                    impact = OpsImpactPipeline()
+                    await asyncio.to_thread(impact.calculate_sector_loss_matrix)
+                except Exception as e:
+                    logger.error(f"Impact pipeline isolated error: {e}")
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in ops pipelines worker loop: {e}")
+                self._record_error("ops_pipelines_worker", str(e))
+                
+            # Run ops pipelines every hour
+            try:
+                await asyncio.sleep(3600)
             except asyncio.CancelledError:
                 break
 

@@ -1052,15 +1052,25 @@
     let savedTelemetryRecords = [];
     try {
       savedTelemetryRecords = JSON.parse(localStorage.getItem('airsense_recorded_telemetry') || '[]');
+      if (Array.isArray(savedTelemetryRecords)) {
+        savedTelemetryRecords = savedTelemetryRecords.map(r => {
+          if (!r.source || r.source === 'ESP32 ON-SITE' || r.source === 'ESP32 ON SITE' || r.source === 'onsite_esp32') {
+            r.source = 'BIC-KHI-ROOF-01';
+          }
+          return r;
+        });
+      } else {
+        savedTelemetryRecords = [];
+      }
     } catch(e) { savedTelemetryRecords = []; }
 
     if (!savedTelemetryRecords || savedTelemetryRecords.length === 0) {
       const nowMs = Date.now();
       savedTelemetryRecords = [
-        { timeMs: nowMs - 15000, time: new Date(nowMs - 15000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.5', pm25: '17.8', pm10: '21.0', temp: '28.5', hum: '63.0', press: '1012.2', rain: false, qc: 'VERIFIED RAW' },
-        { timeMs: nowMs - 30000, time: new Date(nowMs - 30000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '11.8', pm25: '18.1', pm10: '21.5', temp: '28.6', hum: '63.2', press: '1012.1', rain: false, qc: 'VERIFIED RAW' },
-        { timeMs: nowMs - 45000, time: new Date(nowMs - 45000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.0', pm25: '18.4', pm10: '22.0', temp: '28.7', hum: '63.5', press: '1012.0', rain: false, qc: 'VERIFIED RAW' },
-        { timeMs: nowMs - 60000, time: new Date(nowMs - 60000).toLocaleTimeString(), source: 'ESP32 ON-SITE', pm1: '12.2', pm25: '18.7', pm10: '22.5', temp: '28.9', hum: '63.8', press: '1011.9', rain: false, qc: 'VERIFIED RAW' }
+        { timeMs: nowMs - 15000, time: new Date(nowMs - 15000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '11.5', pm25: '17.8', pm10: '21.0', temp: '28.5', hum: '63.0', press: '1012.2', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 30000, time: new Date(nowMs - 30000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '11.8', pm25: '18.1', pm10: '21.5', temp: '28.6', hum: '63.2', press: '1012.1', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 45000, time: new Date(nowMs - 45000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '12.0', pm25: '18.4', pm10: '22.0', temp: '28.7', hum: '63.5', press: '1012.0', rain: false, qc: 'VERIFIED RAW' },
+        { timeMs: nowMs - 60000, time: new Date(nowMs - 60000).toLocaleTimeString(), source: 'BIC-KHI-ROOF-01', pm1: '12.2', pm25: '18.7', pm10: '22.5', temp: '28.9', hum: '63.8', press: '1011.9', rain: false, qc: 'VERIFIED RAW' }
       ];
       try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
     }
@@ -1107,15 +1117,40 @@
       const pressVal = (p.pressure !== undefined && p.pressure !== null) ? Number(p.pressure).toFixed(1) : (p.pressure_hpa !== undefined && p.pressure_hpa !== null ? Number(p.pressure_hpa).toFixed(1) : '--');
       const rainFlag = Boolean(p.rain_flag);
 
-      const timeMs = (p.timestamp_epoch && Number(p.timestamp_epoch) > 1700000000)
-        ? Number(p.timestamp_epoch) * 1000
-        : Date.now();
+      // Maintain node name strictly as BIC-KHI-ROOF-01
+      let stationName = p.station || p.station_code || 'BIC-KHI-ROOF-01';
+      if (stationName === 'ESP32 ON-SITE' || stationName === 'ESP32 ON SITE' || stationName === 'onsite_esp32') {
+        stationName = 'BIC-KHI-ROOF-01';
+      }
+
+      let timeMs;
+      if (p.timestamp_epoch && Number(p.timestamp_epoch) > 1700000000) {
+        timeMs = Number(p.timestamp_epoch) * 1000;
+      } else if (p.timestamp_utc) {
+        timeMs = new Date(p.timestamp_utc).getTime();
+      } else if (p.timeMs) {
+        timeMs = Number(p.timeMs);
+      } else {
+        timeMs = Date.now();
+      }
       const timeStr = new Date(timeMs).toLocaleTimeString();
+
+      // Deduplication: prevent dual/repeated records for same timestamp (<8s) or identical reading within 25s
+      const isDuplicate = savedTelemetryRecords.some(r => {
+        const timeDiff = Math.abs((r.timeMs || 0) - timeMs);
+        if (timeDiff < 8000) return true;
+        if (timeDiff < 25000 && r.pm25 === pm25Val && r.temp === tempVal && r.hum === humVal && r.press === pressVal) {
+          return true;
+        }
+        return false;
+      });
+      if (isDuplicate) return;
 
       const newRec = {
         timeMs: timeMs,
         time: timeStr,
-        source: 'ESP32 ON-SITE',
+        timestamp_utc: p.timestamp_utc || new Date(timeMs).toISOString(),
+        source: stationName,
         pm1: pm1Val,
         pm25: pm25Val,
         pm10: pm10Val,
@@ -1126,12 +1161,10 @@
         qc: 'VERIFIED RAW'
       };
       
-      if (!savedTelemetryRecords.some(r => Math.abs((r.timeMs || 0) - timeMs) < 5000)) {
-        savedTelemetryRecords.unshift(newRec);
-        if (savedTelemetryRecords.length > 120) savedTelemetryRecords.length = 120;
-        try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
-        renderTelemetryTable();
-      }
+      savedTelemetryRecords.unshift(newRec);
+      while (savedTelemetryRecords.length > 120) savedTelemetryRecords.pop();
+      try { localStorage.setItem('airsense_recorded_telemetry', JSON.stringify(savedTelemetryRecords)); } catch(e){}
+      renderTelemetryTable();
     }
 
     let hasHydratedTelemetry = false;
@@ -1150,7 +1183,7 @@
               timeMs: timeMs,
               time: timeStr,
               timestamp_utc: r.timestamp_utc || null,
-              source: r.station || 'ESP32 ON-SITE',
+              source: (r.station && r.station !== 'ESP32 ON-SITE' && r.station !== 'ESP32 ON SITE' && r.station !== 'onsite_esp32') ? r.station : 'BIC-KHI-ROOF-01',
               pm1: (r.pm1 !== undefined && r.pm1 !== null) ? Number(r.pm1).toFixed(1) : '--',
               pm25: (r.pm2_5 !== undefined && r.pm2_5 !== null) ? Number(r.pm2_5).toFixed(1) : (r.pm25 !== undefined && r.pm25 !== null ? Number(r.pm25).toFixed(1) : '--'),
               pm10: (r.pm10 !== undefined && r.pm10 !== null) ? Number(r.pm10).toFixed(1) : '--',
@@ -1322,9 +1355,20 @@
           setTimeout(initCloudMQTT, 3000);
         };
 
+        let lastMqttPayloadStr = null;
+        let lastMqttPayloadTime = 0;
         client.onMessageArrived = function (message) {
           try {
-            const payload = JSON.parse(message.payloadString);
+            const payloadStr = message.payloadString;
+            const now = Date.now();
+            // Drop duplicate payload strings delivered twice within 4 seconds
+            if (payloadStr === lastMqttPayloadStr && (now - lastMqttPayloadTime) < 4000) {
+              return;
+            }
+            lastMqttPayloadStr = payloadStr;
+            lastMqttPayloadTime = now;
+
+            const payload = JSON.parse(payloadStr);
             applyLiveTelemetryPacket(payload);
           } catch (e) {
             console.error("[MQTT] Error parsing packet payload:", e);
@@ -1339,7 +1383,7 @@
           onSuccess: function () {
             isMqttConnecting = false;
             console.log("[MQTT] Connected to Global Cloud Broker via WebSocket (" + mqttHost + ":" + mqttPort + ")!");
-            client.subscribe("airsense/#");
+            // Authoritative single subscription to avoid dual response (supported pattern: airsense/#)
             client.subscribe("airsense/karachi/bic_roof/telemetry");
           },
           onFailure: function (e) {
@@ -1371,6 +1415,7 @@
       }
     }
 
+    let lastDiagPacketIso = null;
     async function fetchHardwareDiagnostics() {
       try {
         const res = await fetch(`/api/v1/ingest/sensors/diagnostic?_t=${Date.now()}`);
@@ -1381,20 +1426,30 @@
           lastMqttPacketTime = Math.max(lastMqttPacketTime, Date.now() - lagMs);
           renderConnectedUI(data);
 
-          const pms = data.sensors?.pms7003?.last_valid_value;
-          const bme = data.sensors?.bme280?.last_valid_value;
-          const rain = data.sensors?.rain_sensor?.last_valid_value;
-          const hasValidTelemetry = (pms && pms.pm2_5 !== undefined && pms.pm2_5 !== null) || (bme && bme.temperature_c !== undefined && bme.temperature_c !== null);
-          if (hasValidTelemetry) {
-            addTelemetryRecord({
-              pm1: pms?.pm1 ?? null,
-              pm2_5: pms?.pm2_5 ?? null,
-              pm10: pms?.pm10 ?? null,
-              temperature: bme ? bme.temperature_c : null,
-              humidity: bme ? bme.humidity_pct : null,
-              pressure: bme ? bme.pressure_hpa : null,
-              rain_flag: rain ? rain.rain_flag : false
-            });
+          // Only inject diagnostic reading into telemetry table if MQTT is inactive (>25s) AND this packet is genuinely new
+          const isMqttLive = (Date.now() - lastMqttPacketTime) < 25000;
+          const packetIso = data.last_packet_received_at;
+          const isNewPacket = packetIso && packetIso !== lastDiagPacketIso;
+
+          if (!isMqttLive && isNewPacket) {
+            lastDiagPacketIso = packetIso;
+            const pms = data.sensors?.pms7003?.last_valid_value;
+            const bme = data.sensors?.bme280?.last_valid_value;
+            const rain = data.sensors?.rain_sensor?.last_valid_value;
+            const hasValidTelemetry = (pms && pms.pm2_5 !== undefined && pms.pm2_5 !== null) || (bme && bme.temperature_c !== undefined && bme.temperature_c !== null);
+            if (hasValidTelemetry) {
+              addTelemetryRecord({
+                timestamp_utc: packetIso,
+                station: data.station_code || 'BIC-KHI-ROOF-01',
+                pm1: pms?.pm1 ?? null,
+                pm2_5: pms?.pm2_5 ?? null,
+                pm10: pms?.pm10 ?? null,
+                temperature: bme ? bme.temperature_c : null,
+                humidity: bme ? bme.humidity_pct : null,
+                pressure: bme ? bme.pressure_hpa : null,
+                rain_flag: rain ? rain.rain_flag : false
+              });
+            }
           }
         } else {
           // Instantly mark disconnected if packet age exceeds 35s

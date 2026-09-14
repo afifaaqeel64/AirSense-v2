@@ -1,0 +1,62 @@
+name: AirSense CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_PASSWORD: test123
+          POSTGRES_DB: airsense_test
+          POSTGRES_USER: airsense
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        options: --health-cmd "redis-cli ping" --health-interval 10s
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r backend/requirements.txt pytest pytest-asyncio httpx
+
+      - name: Run tests
+        run: cd backend && pytest tests/ -v --tb=short
+        env:
+          DATABASE_URL: postgresql+asyncpg://airsense:test123@localhost:5432/airsense_test
+          REDIS_URL: redis://localhost:6379/0
+          JWT_SECRET: test-secret-key
+          ENVIRONMENT: test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/airsense
+            git pull origin main
+            bash scripts/deploy.sh

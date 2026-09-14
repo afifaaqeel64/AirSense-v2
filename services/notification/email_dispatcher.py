@@ -257,7 +257,7 @@ def render_backup_email_html(summary_data: Dict[str, Any], target_date: str) -> 
           <tr>
             <td style="background-color: #0d1527; padding: 20px 32px; border-top: 1px solid #1e293b; text-align: center;">
               <p style="margin: 0; font-size: 11px; color: #64748b;">
-                AirSense Pakistan Autonomous Monitoring System • Beaconhouse International College (BIC) Rooftop, Karachi
+                AirSense Pakistan Autonomous Monitoring System • Beaconhouse International College (BIC)
               </p>
               <p style="margin: 4px 0 0 0; font-size: 10px; color: #475569;">
                 Automated 24/7 telemetry snapshot dispatched concurrently with Telegram Bot channel.
@@ -405,7 +405,7 @@ def render_introduction_email_text(recipients: List[str]) -> str:
     """Renders plain text version of the AirSense introduction and system activation email."""
     recip_str = ", ".join(recipients) if recipients else "Valued Team Member"
     text = f"""AIRSENSE PAKISTAN - SYSTEM ACTIVATION & INTRODUCTION BRIEFING
-Station Node: BIC-KHI-ROOF-01 (Beaconhouse International College, Karachi Rooftop)
+Station Node: BIC-KHI-ROOF-01 (Beaconhouse International College)
 Live Platform: https://airsense-team.vercel.app
 
 Dear AirSense Team & Research Collaborators,
@@ -436,7 +436,7 @@ Thank you for being part of the AirSense Pakistan initiative to advance air qual
 
 Warm regards,
 AirSense Pakistan Engineering & Research Team
-Beaconhouse International College (BIC), Karachi, Pakistan
+Beaconhouse International College (BIC)
 """
     return text
 
@@ -585,7 +585,7 @@ def render_introduction_email_html(recipients: List[str]) -> str:
           <tr>
             <td style="padding: 20px 32px; background-color: #090e1a; border-top: 1px solid #1e293b; text-align: center;">
               <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">
-                AirSense Pakistan &bull; Beaconhouse International College (BIC), Karachi, Pakistan
+                AirSense Pakistan &bull; Beaconhouse International College (BIC)
               </div>
               <div style="font-size: 11px; color: #475569;">
                 Autonomous IoT Environmental Monitoring Network &bull; Zero-Cost Cloud Infrastructure

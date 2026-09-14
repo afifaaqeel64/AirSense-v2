@@ -1,0 +1,8 @@
+# SYNTHETIC EXAMPLE DATA ONLY - FOR TEST CONTRACT VERIFICATION. DO NOT LOAD INTO PRODUCTION.
+timestamp_utc,campus_code,station_name,pm25,pm10,temperature,humidity,qc_status
+2026-07-27T08:00:00Z,ISB_CAMPUS,Islamabad Onsite Station,38.5,65.0,29.5,58.0,pass
+2026-07-27T09:00:00Z,ISB_CAMPUS,Islamabad Onsite Station,41.2,71.5,30.8,55.0,pass
+2026-07-27T10:00:00Z,ISB_CAMPUS,Islamabad Onsite Station,45.0,79.0,32.1,52.0,pass
+2026-07-27T08:00:00Z,KHI_CAMPUS,Karachi Onsite Station,52.0,94.0,33.0,72.0,pass
+2026-07-27T09:00:00Z,KHI_CAMPUS,Karachi Onsite Station,54.8,98.5,33.5,70.0,pass
+2026-07-27T10:00:00Z,KHI_CAMPUS,Karachi Onsite Station,59.1,105.0,34.0,68.0,pass

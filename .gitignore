@@ -52,9 +52,10 @@ out/
 # Model & Data Exports (Keep samples, ignore large exports)
 data/exports/*
 !data/exports/.gitkeep
-data/models/*.pkl
-data/models/*.joblib
-data/models/*.onnx
+data/datasets/
+data/models/
+data/ops_db/
+data/ops/
 
 # Docker Volumes & Local State
 .docker/

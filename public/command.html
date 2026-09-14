@@ -2259,10 +2259,20 @@
       const brokerPort = isHttps ? 8884 : 8000;
       const client = new Paho.MQTT.Client('broker.hivemq.com', brokerPort, '/mqtt', 'cmd-' + Math.floor(Math.random() * 100000));
       
+      let lastCmdPayloadStr = null;
+      let lastCmdPayloadTime = 0;
       client.onConnectionLost = () => { setTimeout(initCommandMQTT, 5000); };
       client.onMessageArrived = (msg) => {
         try {
-          const data = JSON.parse(msg.payloadString);
+          const payloadStr = msg.payloadString;
+          const now = Date.now();
+          if (payloadStr === lastCmdPayloadStr && (now - lastCmdPayloadTime) < 4000) {
+            return;
+          }
+          lastCmdPayloadStr = payloadStr;
+          lastCmdPayloadTime = now;
+
+          const data = JSON.parse(payloadStr);
           if (data.pm2_5 === undefined && data.temperature === undefined && data.pm1 === undefined) {
             return;
           }
@@ -2342,7 +2352,6 @@
         timeout: 10,
         onSuccess: () => {
           client.subscribe('airsense/karachi/bic_roof/telemetry', { qos: 0 });
-          client.subscribe('airsense/#', { qos: 0 });
         },
         onFailure: () => { setTimeout(initCommandMQTT, 5000); }
       });

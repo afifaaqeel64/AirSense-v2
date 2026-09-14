@@ -37,6 +37,8 @@ except ImportError as _ml_err:
 
 from apps.api.routers.hardware_router import router as hardware_router
 from apps.api.routers.telegram_router import router as telegram_router
+from apps.api.routers.decision_router import router as decision_router
+from apps.api.routers.backup_router import router as backup_router
 
 
 @asynccontextmanager
@@ -164,6 +166,8 @@ if HAS_ML_MODULES:
 
 app.include_router(hardware_router)
 app.include_router(telegram_router)
+app.include_router(decision_router)
+app.include_router(backup_router)
 
 # Operational Interface Static Serving
 web_dir = Path(__file__).resolve().parent.parent / "web"
@@ -195,6 +199,7 @@ if web_dir.exists():
     async def serve_diagnostics_dashboard():
         return FileResponse(web_dir / "diagnostics_dashboard.html")
 
+    @app.get("/ops-v2", include_in_schema=False)
     @app.get("/command", include_in_schema=False)
     @app.get("/command_center", include_in_schema=False)
     @app.get("/command-center", include_in_schema=False)
