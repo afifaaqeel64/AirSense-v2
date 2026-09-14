@@ -35,6 +35,7 @@ try:
     from apps.api.main import app as fastapi_app
 except Exception as e:
     import_error = traceback.format_exc()
+    import_err_msg = str(e)
     from fastapi import FastAPI
     from fastapi.responses import JSONResponse
 
@@ -44,7 +45,7 @@ except Exception as e:
     async def fallback_route(path_name: str):
         return JSONResponse(
             status_code=200,
-            content={"status": "app_import_error", "error": str(e), "traceback": import_error}
+            content={"status": "app_import_error", "error": import_err_msg, "traceback": import_error}
         )
 
 if import_error is None:
