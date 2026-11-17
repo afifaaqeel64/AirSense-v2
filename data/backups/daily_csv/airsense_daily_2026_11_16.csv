@@ -1,0 +1,1 @@
+reading_id,campus_id,station_id,device_id,sequence_number,observed_at_utc,observed_at_pkt,source,pm1,pm2_5,pm10,temperature_c,humidity_pct,pressure_hpa,rain_flag,aqi
